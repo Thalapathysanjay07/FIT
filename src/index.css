@@ -34,3 +34,6 @@
 .account-strip{height:34px;display:flex;align-items:center;justify-content:flex-end;gap:15px;padding:0 24px;background:#101611;border-bottom:1px solid #29332b;color:#8f9b90;font-size:10px}
 .account-strip b{color:#eaf1e9}.account-strip button{border:0;background:none;color:#b6f36b;font-size:10px}
 @media(max-width:520px){.auth-card{padding:28px 22px}.auth-card h1{font-size:25px}.account-strip{padding:0 15px}}
+
+.weight-form{display:flex;align-items:end;gap:12px;margin:18px 0}.weight-form label{display:grid;gap:7px;flex:1;color:#aeb8ae;font-size:10px}.weight-form input{width:100%;background:#0b0f0c;border:1px solid #303a32;border-radius:6px;padding:11px;color:white;outline:0}.weight-form input:focus{border-color:var(--green)}.weight-history{border-top:1px solid var(--line);margin-top:18px}.weight-entry{display:flex;justify-content:space-between;padding:12px 2px;border-bottom:1px solid #252d27;font-size:11px;color:#9ca69d}.weight-entry strong{color:#e8eee8}
+@media(max-width:520px){.weight-form{align-items:stretch;flex-direction:column}.weight-form .primary-btn{justify-content:center}}
