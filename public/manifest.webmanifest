@@ -1,0 +1,24 @@
+{
+  "id": "/",
+  "name": "FIT — Train with purpose",
+  "short_name": "FIT",
+  "description": "Your personal training and nutrition companion.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#090b0a",
+  "theme_color": "#090b0a",
+  "categories": [
+    "health",
+    "fitness"
+  ],
+  "icons": [
+    {
+      "src": "/fit-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
