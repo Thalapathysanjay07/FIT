@@ -1,28 +1,44 @@
-# FIT — Personal Fitness Platform
+# FIT — Fitness companion
 
-Premium black + neon-green fitness companion built with React, Vite and Lucide icons.
+Premium black + neon-green React/Vite fitness app with a Node/Express API.
 
-## Run locally
+## Frontend
 
 ```bash
 npm install
 npm run dev
+npm run build
 ```
 
-## Production build
+## Backend
+
+Requires a PostgreSQL database (Neon, Supabase PostgreSQL, or another managed PostgreSQL provider).
 
 ```bash
-npm run build
-npm run preview
+cd backend
+npm install
+cp .env.example .env
+# Fill DATABASE_URL, JWT_SECRET and CLIENT_ORIGIN in .env
+npm run dev
 ```
 
-## Install as an app (PWA)
+The API creates its required `users` and `user_data` tables on startup. Passwords are hashed with bcrypt. Sessions use signed JWTs. User fitness logs are stored per account in PostgreSQL.
 
-Deploy the production build over HTTPS. On Android Chrome, open the site and choose **Install app** or **Add to Home screen**. On iPhone Safari, use **Share → Add to Home Screen**. The service worker caches the app shell for basic offline opening; API/network-dependent features still require a connection.
+## Deployment
 
-## Android package (Capacitor)
+1. Create a managed PostgreSQL database and copy its connection string.
+2. Deploy this repository to Render using the included `render.yaml` blueprint. Set `DATABASE_URL` to the database connection string and `CLIENT_ORIGIN` to the deployed Netlify site origin.
+3. In `netlify.toml`, replace `REPLACE-WITH-FIT-API` with the actual Render service hostname.
+4. Deploy the frontend to Netlify. The `/api/*` rewrite forwards authentication and data requests to the Render API.
+5. Verify `https://YOUR-API-HOST/api/health` returns `{"status":"ok"}`, then register a test account and confirm sign-in and data sync.
 
-Install dependencies, then generate the native Android project:
+Never commit real database URLs, passwords, JWT secrets, payment keys or provider credentials. Configure secrets in the hosting provider dashboard.
+
+## Installable app and Android
+
+The PWA manifest, icon and service worker enable installation from an HTTPS deployment. Android Chrome: menu → Install app. iPhone Safari: Share → Add to Home Screen.
+
+Capacitor commands:
 
 ```bash
 npm install
@@ -31,39 +47,22 @@ npm run android:sync
 npm run android:open
 ```
 
-Android Studio and the Android SDK are required to build/sign an APK or AAB. Set up an app signing key before publishing. iOS packaging requires macOS and Xcode; it is not generated on Windows.
+The GitHub Actions workflow **FIT Android APK** builds a debug APK and uploads it as a workflow artifact. Android Studio/SDK is required for local native builds. iOS packaging requires macOS and Xcode.
 
-## Current frontend features
+## Included features
 
-- Responsive dashboard and mobile navigation
-- Workout library with beginner, intermediate and advanced filters
-- Workout completion tracking
-- Nutrition log with add/remove meal interactions
-- Calorie and protein target controls
-- Water intake tracker
-- Progress overview
-- Workout discovery categories and search
-- Self-paced habit challenges
+- Account registration and sign-in
+- Per-account cloud persistence for browser-local FIT tracking data
+- Dashboard, workout library and completion tracking
+- Nutrition and protein logging, editable daily targets
+- Hydration tracker, progress, challenges and discovery
 - FIT Coach starter guidance
-- Membership/pricing and revenue-model screens
-- Browser-local persistence using localStorage
-- Installable PWA manifest, app icon and service-worker app-shell cache
-- Capacitor configuration for Android packaging
+- Free and proposed Pro membership screens
+- Responsive layouts and installable PWA
+- Android Capacitor build pipeline
 
-## Product decisions
+## Not yet production-enabled
 
-- Goals: weight loss, muscle gain and fitness maintenance
-- Levels: beginner, intermediate and advanced
-- Language: English
-- Visual system: premium black + neon green
-- Business direction: free tier, proposed premium subscription, trainer marketplace, sponsorships and affiliate referrals
+The FIT Coach is rule-based and is not connected to an external AI model. Payments, real subscription entitlements, ad network, trainer marketplace and payouts, push notifications, live health-device integrations, and app-store release signing still require provider accounts, implementation, review and secrets. The ₹199/month price is a proposal only; no payment is currently collected. Workout suggestions are general educational content, not individualized medical advice.
 
-## Important implementation status
-
-This repository is a **frontend MVP and installable app foundation**, not a fully launched commercial fitness service. Current logs, goals, challenge progress and preferences are stored only in the current browser using localStorage. They do not sync between devices or users.
-
-The FIT Coach uses built-in rule-based responses; it is not connected to a live AI service. Workout and trend content is starter content, not live trend analytics or medically individualized programming. The proposed ₹199/month Pro price is a planning placeholder, not an active subscription.
-
-Not yet integrated: secure authentication, backend API, cloud database, user profiles, server-side workout/diet personalization, payment gateway and webhooks, trainer onboarding/verification and payouts, affiliate tracking, ad network, push notifications, admin moderation, privacy/terms/consent flows, app-store signing and production monitoring.
-
-Before collecting payments or showing ads, configure the relevant provider accounts, legal disclosures, privacy and refund policies, tax requirements, and security controls. Do not advertise guaranteed fitness outcomes or guaranteed income.
+Before public launch, complete privacy policy/terms, account deletion and data export workflows, security review, database backups, monitoring, app-store assets and legal/payment compliance.
