@@ -63,7 +63,7 @@ export default function AuthGate() {
   }
 
   if (checking) return <div className="auth-loading"><Activity/> FIT</div>;
-  if (session) return <><div className="account-strip"><span>Signed in as <b>{session.user.name}</b></span><button onClick={() => { localStorage.removeItem("fit-token"); setSession(null); }}>Sign out</button></div><App/></>;
+  if (session) return <><div className="account-strip"><span>Signed in as <b>{session.user.name}</b></span><button onClick={() => { localStorage.removeItem("fit-token"); setSession(null); }}>Sign out</button></div><App user={session.user} onSignOut={() => { localStorage.removeItem("fit-token"); setSession(null); }}/></>;
 
   return <main className="auth-screen">
     <section className="auth-card">
