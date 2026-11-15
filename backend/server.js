@@ -22,6 +22,7 @@ app.use(helmet());
 app.use(cors({ origin: (process.env.CLIENT_ORIGIN || "").split(",").filter(Boolean), credentials: false }));
 app.use(express.json({ limit: "256kb" }));
 app.use("/api/auth", rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false }));
+app.use("/api/coach", rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false }));
 
 async function ready(req,res,next) {
   if (!pool) return res.status(503).json({ error: "Database is not configured. Set DATABASE_URL." });
@@ -94,6 +95,49 @@ app.get("/api/auth/me", ready, auth, async (req,res) => {
   const r = await pool.query("SELECT id,name,email FROM users WHERE id=$1", [req.user.sub]);
   if (!r.rows[0]) return res.status(401).json({ error: "Account not found." });
   res.json({ user:r.rows[0] });
+});
+app.post("/api/coach", ready, auth, async (req,res) => {
+  const question = String(req.body?.question || "").trim();
+  if (question.length < 2 || question.length > 1200) {
+    return res.status(400).json({ error: "Ask a question between 2 and 1,200 characters." });
+  }
+  if (!process.env.OPENAI_API_KEY) {
+    return res.status(503).json({ error: "FIT Coach AI is not configured yet. Add OPENAI_API_KEY to the backend environment to enable it." });
+  }
+  const baseUrl = (process.env.AI_BASE_URL || "https://api.openai.com/v1").replace(/\\/$/, "");
+  const model = process.env.AI_MODEL || "gpt-4o-mini";
+  try {
+    const response = await fetch(baseUrl + "/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + process.env.OPENAI_API_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.4,
+        max_tokens: 500,
+        messages: [
+          { role: "system", content: "You are FIT Coach, a supportive general fitness education assistant. Give concise, practical, non-judgmental guidance. Ask for missing context when needed. Do not diagnose, prescribe treatment, recommend extreme diets, guarantee results, or provide dangerous exercise instructions. For injuries, pregnancy, chronic conditions, eating disorders, or concerning symptoms, advise the user to consult a qualified healthcare professional. Never claim to be a doctor or certified personal trainer. Distinguish general information from individualized medical advice." },
+          { role: "user", content: question }
+        ]
+      }),
+      signal: AbortSignal.timeout(20000)
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.error("FIT Coach provider error:", response.status, payload?.error?.message || "Request failed");
+      return res.status(502).json({ error: "FIT Coach is temporarily unavailable. Please try again shortly." });
+    }
+    const answer = payload?.choices?.[0]?.message?.content;
+    if (typeof answer !== "string" || !answer.trim()) {
+      return res.status(502).json({ error: "FIT Coach returned an empty response. Please try again." });
+    }
+    res.json({ answer: answer.trim(), model });
+  } catch (error) {
+    console.error("FIT Coach request failed:", error.name || "Error");
+    res.status(504).json({ error: "FIT Coach timed out. Please try again." });
+  }
 });
 app.get("/api/data", ready, auth, async (req,res) => {
   const r = await pool.query("SELECT data FROM user_data WHERE user_id=$1", [req.user.sub]);
