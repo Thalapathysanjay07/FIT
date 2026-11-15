@@ -68,9 +68,9 @@ The GitHub Actions workflow **FIT Android APK** builds a debug APK and uploads i
 - Account registration and sign-in
 - Per-account cloud persistence for browser-local FIT tracking data
 - Dashboard, workout library, exercise instructions and completion tracking
-- Goal-based weekly training schedule, training frequency and rest timer
+- Goal-based weekly training schedule, equipment-aware exercise substitutions, training frequency and rest timer
 - Fitness profile with age, height, weight, target weight, equipment and experience settings
-- Daily nutrition and protein logging, date-specific meal and hydration tracking, editable targets
+- Daily nutrition and protein logging, date-specific meal and hydration tracking, editable targets and vegetarian / mixed / vegan sample meal planner
 - Hydration tracker, progress, challenges and discovery
 - FIT Coach starter guidance
 - Free and proposed Pro membership screens
