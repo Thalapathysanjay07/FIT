@@ -34,27 +34,9 @@ The FIT Coach calls the backend at `POST /api/coach`; the provider key is kept o
 
 The endpoint requires a signed-in user, limits questions to 1,200 characters, applies rate limiting and returns a safe unavailable message when the provider is not configured. API usage may incur provider charges. Do not put the API key in frontend environment variables or commit it to Git.
 
-### QR / UPI membership payments
+### Membership and payments
 
-FIT Pro supports direct UPI intent and a generated QR code; it does not use Razorpay, Stripe, or another payment gateway. Configure these backend environment variables:
-
-- `FIT_UPI_ID` — merchant UPI ID (required)
-- `FIT_MERCHANT_NAME` — merchant display name
-- `FIT_ADMIN_KEY` — long random secret (at least 24 characters) for manual payment review
-
-The current plans are ₹199 for 30 days and ₹1,499 for 365 days. A signed-in user pays in their UPI app, then submits the UPI transaction reference/UTR. Requests remain pending until the owner verifies the payment in their bank/UPI merchant statement and approves it. Do not activate memberships based only on a user-submitted UTR.
-
-Manual review endpoint (keep the admin key private):
-
-```http
-POST /api/admin/payments/:id/review
-X-FIT-ADMIN-KEY: <FIT_ADMIN_KEY>
-Content-Type: application/json
-
-{"decision":"approve"}
-```
-
-Use `{"decision":"reject"}` to reject. This endpoint is intended for a trusted owner-operated admin tool; do not expose the admin key in the frontend. QR images are generated from the configured UPI payment URI by an external QR image service.
+Membership is currently informational only. Checkout and premium activation are intentionally disabled while the core app is being completed. QR / UPI payment will be implemented later, after the fitness features and deployment are tested. No payment should be collected through the current app.
 
 ## Deployment
 
@@ -85,16 +67,20 @@ The GitHub Actions workflow **FIT Android APK** builds a debug APK and uploads i
 
 - Account registration and sign-in
 - Per-account cloud persistence for browser-local FIT tracking data
-- Dashboard, workout library and completion tracking
-- Nutrition and protein logging, editable daily targets
+- Dashboard, workout library, exercise instructions and completion tracking
+- Goal-based weekly training schedule, training frequency and rest timer
+- Fitness profile with age, height, weight, target weight, equipment and experience settings
+- Daily nutrition and protein logging, date-specific meal and hydration tracking, editable targets
 - Hydration tracker, progress, challenges and discovery
 - FIT Coach starter guidance
 - Free and proposed Pro membership screens
+- Account settings, fitness-data export and password-confirmed account deletion
+- Privacy policy and terms starter pages
 - Responsive layouts and installable PWA
 - Android Capacitor build pipeline
 
 ## Not yet production-enabled
 
-The FIT Coach requires a configured AI provider key. QR/UPI payments use manual transaction-reference submission and owner verification; no payment gateway or automatic bank verification is included. An owner-operated admin review workflow, subscription entitlement enforcement across all premium features, ad network, trainer marketplace and payouts, push notifications, live health-device integrations, and app-store release signing still require additional implementation, review and secrets. Workout suggestions are general educational content, not individualized medical advice.
+The FIT Coach requires a configured AI provider key. Membership checkout and payments are currently disabled by design and will be added later. An owner-operated admin review workflow, subscription entitlement enforcement across all premium features, ad network, trainer marketplace and payouts, push notifications, live health-device integrations, and app-store release signing still require additional implementation, review and secrets. Workout suggestions are general educational content, not individualized medical advice.
 
 Before public launch, complete privacy policy/terms, account deletion and data export workflows, security review, database backups, monitoring, app-store assets and legal/payment compliance.
