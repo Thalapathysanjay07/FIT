@@ -27,8 +27,8 @@ const sessions=[
  {title:"Conditioning + mobility",focus:"Conditioning",items:["Jumping jack","Mountain climber","Cat-cow mobility","Dead bug"]}
 ];
 function todayKey(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
-export default function FeatureHub({page,onToast,onSignOut}){
- const [profile,setProfile]=useState(()=>read("fit-profile",{name:"",age:"",heightCm:"",weightKg:"",targetWeightKg:"",goal:"Weight loss",level:"Beginner",equipment:"Bodyweight",daysPerWeek:3,sessionMinutes:30}));
+export default function FeatureHub({page,onToast,onSignOut,user}){
+ const [profile,setProfile]=useState(()=>read("fit-profile",{name:user?.name||"",age:"",heightCm:"",weightKg:"",targetWeightKg:"",goal:"Weight loss",level:"Beginner",equipment:"Bodyweight",daysPerWeek:3,sessionMinutes:30}));
  const [completed,setCompleted]=useState(()=>read("fit-session-log",{}));
  const [query,setQuery]=useState("");
  const [category,setCategory]=useState("All");
