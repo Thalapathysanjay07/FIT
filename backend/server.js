@@ -43,6 +43,24 @@ async function init() {
       data JSONB NOT NULL DEFAULT '{}'::jsonb,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS payment_requests (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      plan_code VARCHAR(30) NOT NULL,
+      amount_paise INTEGER NOT NULL,
+      utr VARCHAR(80) NOT NULL UNIQUE,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      reviewed_at TIMESTAMPTZ
+    );
+    CREATE TABLE IF NOT EXISTS memberships (
+      user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      plan_code VARCHAR(30) NOT NULL,
+      starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL,
+      payment_request_id BIGINT REFERENCES payment_requests(id),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 }
 function tokenFor(user) {
@@ -138,6 +156,85 @@ app.post("/api/coach", ready, auth, async (req,res) => {
     console.error("FIT Coach request failed:", error.name || "Error");
     res.status(504).json({ error: "FIT Coach timed out. Please try again." });
   }
+});
+// Manual UPI/QR membership payments. No payment gateway or automatic payment claim.
+const membershipPlans = {
+  monthly: { name: "FIT Pro Monthly", amountPaise: 19900, days: 30 },
+  yearly: { name: "FIT Pro Yearly", amountPaise: 149900, days: 365 }
+};
+app.get("/api/membership/config", ready, async (_req,res) => {
+  res.json({
+    upiId: process.env.FIT_UPI_ID || "",
+    merchantName: process.env.FIT_MERCHANT_NAME || "FIT",
+    plans: Object.entries(membershipPlans).map(([code,p]) => ({ code, name:p.name, amount:p.amountPaise/100, days:p.days }))
+  });
+});
+app.get("/api/membership/me", ready, auth, async (req,res) => {
+  const result = await pool.query(
+    "SELECT plan_code, starts_at, expires_at FROM memberships WHERE user_id=$1 AND expires_at>NOW()",
+    [req.user.sub]
+  );
+  const payments = await pool.query(
+    "SELECT id,plan_code,amount_paise,utr,status,created_at FROM payment_requests WHERE user_id=$1 ORDER BY created_at DESC LIMIT 5",
+    [req.user.sub]
+  );
+  res.json({ membership: result.rows[0] || null, payments: payments.rows });
+});
+app.post("/api/payments/upi-request", ready, auth, async (req,res) => {
+  const planCode = String(req.body?.planCode || "");
+  const utr = String(req.body?.utr || "").trim().replace(/\\s/g,"");
+  const plan = membershipPlans[planCode];
+  if (!plan) return res.status(400).json({ error:"Choose a valid membership plan." });
+  if (!/^[A-Za-z0-9-]{8,80}$/.test(utr)) return res.status(400).json({ error:"Enter a valid UPI transaction reference/UTR (8–80 letters or numbers)." });
+  if (!process.env.FIT_UPI_ID) return res.status(503).json({ error:"UPI payments are not configured yet. The app owner must add FIT_UPI_ID to the backend environment." });
+  try {
+    const result = await pool.query(
+      "INSERT INTO payment_requests(user_id,plan_code,amount_paise,utr) VALUES($1,$2,$3,$4) RETURNING id,plan_code,amount_paise,utr,status,created_at",
+      [req.user.sub,planCode,plan.amountPaise,utr]
+    );
+    res.status(201).json({ payment: result.rows[0], message:"Payment reference submitted. FIT Pro will activate only after manual verification." });
+  } catch(error) {
+    if (error.code === "23505") return res.status(409).json({ error:"This UTR has already been submitted." });
+    console.error("UPI request error:",error.message);
+    res.status(500).json({ error:"Could not submit payment reference." });
+  }
+});
+app.post("/api/admin/payments/:id/review", ready, async (req,res) => {
+  const supplied = String(req.headers["x-fit-admin-key"] || "");
+  if (!process.env.FIT_ADMIN_KEY || supplied.length < 24 || supplied !== process.env.FIT_ADMIN_KEY) {
+    return res.status(401).json({ error:"Admin authorization required." });
+  }
+  const id = Number(req.params.id);
+  const decision = String(req.body?.decision || "");
+  if (!Number.isSafeInteger(id) || id < 1 || !["approve","reject"].includes(decision)) {
+    return res.status(400).json({ error:"Invalid payment review request." });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const found = await client.query("SELECT * FROM payment_requests WHERE id=$1 FOR UPDATE",[id]);
+    const payment = found.rows[0];
+    if (!payment) { await client.query("ROLLBACK"); return res.status(404).json({error:"Payment request not found."}); }
+    if (payment.status !== "pending") { await client.query("ROLLBACK"); return res.status(409).json({error:"Payment request has already been reviewed."}); }
+    const status = decision === "approve" ? "approved" : "rejected";
+    await client.query("UPDATE payment_requests SET status=$1,reviewed_at=NOW() WHERE id=$2",[status,id]);
+    if (decision === "approve") {
+      const days = membershipPlans[payment.plan_code]?.days;
+      if (!days) throw new Error("Unknown membership plan.");
+      await client.query(`INSERT INTO memberships(user_id,plan_code,starts_at,expires_at,payment_request_id)
+        VALUES($1,$2,NOW(),NOW()+($3 * INTERVAL '1 day'),$4)
+        ON CONFLICT(user_id) DO UPDATE SET plan_code=EXCLUDED.plan_code,
+        starts_at=NOW(),expires_at=NOW()+($3 * INTERVAL '1 day'),
+        payment_request_id=EXCLUDED.payment_request_id,updated_at=NOW()`,
+        [payment.user_id,payment.plan_code,days,id]);
+    }
+    await client.query("COMMIT");
+    res.json({success:true,status});
+  } catch(error) {
+    await client.query("ROLLBACK");
+    console.error("Payment review error:",error.message);
+    res.status(500).json({error:"Could not review payment."});
+  } finally { client.release(); }
 });
 app.get("/api/data", ready, auth, async (req,res) => {
   const r = await pool.query("SELECT data FROM user_data WHERE user_id=$1", [req.user.sub]);
