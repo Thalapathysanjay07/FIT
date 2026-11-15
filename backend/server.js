@@ -23,6 +23,7 @@ app.use(cors({ origin: (process.env.CLIENT_ORIGIN || "").split(",").filter(Boole
 app.use(express.json({ limit: "256kb" }));
 app.use("/api/auth", rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false }));
 app.use("/api/coach", rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false }));
+app.use("/api/payments", rateLimit({ windowMs: 60 * 60 * 1000, limit: 8, standardHeaders: true, legacyHeaders: false }));
 
 async function ready(req,res,next) {
   if (!pool) return res.status(503).json({ error: "Database is not configured. Set DATABASE_URL." });
@@ -182,7 +183,7 @@ app.get("/api/membership/me", ready, auth, async (req,res) => {
 });
 app.post("/api/payments/upi-request", ready, auth, async (req,res) => {
   const planCode = String(req.body?.planCode || "");
-  const utr = String(req.body?.utr || "").trim().replace(/\\s/g,"");
+  const utr = String(req.body?.utr || "").trim().replace(/\s/g,"");
   const plan = membershipPlans[planCode];
   if (!plan) return res.status(400).json({ error:"Choose a valid membership plan." });
   if (!/^[A-Za-z0-9-]{8,80}$/.test(utr)) return res.status(400).json({ error:"Enter a valid UPI transaction reference/UTR (8–80 letters or numbers)." });
