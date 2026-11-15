@@ -24,6 +24,16 @@ npm run dev
 
 The API creates its required `users` and `user_data` tables on startup. Passwords are hashed with bcrypt. Sessions use signed JWTs. User fitness logs are stored per account in PostgreSQL.
 
+### FIT Coach AI configuration
+
+The FIT Coach calls the backend at `POST /api/coach`; the provider key is kept on the server and is never exposed to the browser. To enable live AI responses, add these environment variables to the backend hosting service:
+
+- `OPENAI_API_KEY` — secret API key (required for live responses)
+- `AI_MODEL` — optional model name; defaults to `gpt-4o-mini`
+- `AI_BASE_URL` — optional OpenAI-compatible API base URL; defaults to `https://api.openai.com/v1`
+
+The endpoint requires a signed-in user, limits questions to 1,200 characters, applies rate limiting and returns a safe unavailable message when the provider is not configured. API usage may incur provider charges. Do not put the API key in frontend environment variables or commit it to Git.
+
 ## Deployment
 
 1. Create a managed PostgreSQL database and copy its connection string.
