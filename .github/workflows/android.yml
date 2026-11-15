@@ -24,6 +24,7 @@ jobs:
       - name: Install Android SDK components
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses && "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
       - run: npm install
+      - run: npm run build
       - run: npm run android:add
       - run: npm run android:sync
       - name: Build debug APK
