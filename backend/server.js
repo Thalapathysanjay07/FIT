@@ -115,6 +115,21 @@ app.get("/api/auth/me", ready, auth, async (req,res) => {
   if (!r.rows[0]) return res.status(401).json({ error: "Account not found." });
   res.json({ user:r.rows[0] });
 });
+app.delete("/api/account", ready, auth, async (req,res) => {
+  const password = String(req.body?.password || "");
+  if (!password || password.length > 72) return res.status(400).json({ error:"Enter your current password to confirm account deletion." });
+  try {
+    const found = await pool.query("SELECT password_hash FROM users WHERE id=$1",[req.user.sub]);
+    if (!found.rows[0] || !(await bcrypt.compare(password,found.rows[0].password_hash))) {
+      return res.status(401).json({ error:"Password is incorrect. Your account was not deleted." });
+    }
+    await pool.query("DELETE FROM users WHERE id=$1",[req.user.sub]);
+    res.json({ deleted:true });
+  } catch(error) {
+    console.error("Account deletion error:",error.message);
+    res.status(500).json({ error:"Could not delete the account. Please try again." });
+  }
+});
 app.post("/api/coach", ready, auth, async (req,res) => {
   const question = String(req.body?.question || "").trim();
   if (question.length < 2 || question.length > 1200) {
