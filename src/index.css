@@ -10,3 +10,27 @@
 @media(max-width:1100px){.workout-cards,.discover-grid,.challenge-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.income-streams{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:760px){.sidebar{transform:translateX(-100%);transition:transform .25s;width:270px}.sidebar.open{transform:translateX(0)}.scrim{display:block;position:fixed;inset:0;background:#0009;z-index:4}.mobile-close{display:block;margin-left:auto}.main-area{margin-left:0}.menu-btn{display:block}.topbar{padding:0 16px}.page-content{padding:25px 16px}.date-top{display:none}.workout-cards,.discover-grid,.challenge-grid,.pricing-grid,.coach-layout{grid-template-columns:1fr}.quick-links{grid-template-columns:1fr}.income-streams{grid-template-columns:1fr 1fr}.welcome-row{gap:8px}.date-pill{font-size:0;padding:9px}.date-pill svg{width:17px}.hero-art{right:-35px;opacity:.5}.hero-copy{max-width:80%}.hero-card{padding:24px 20px}.hero-copy h2{font-size:29px}.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.content-grid{grid-template-columns:1fr}.membership-hero{padding:22px}.membership-hero h2{font-size:26px}}
 @media(max-width:390px){.income-streams{grid-template-columns:1fr}.stat-card{padding:13px}.stat-value{font-size:20px}}
+
+
+/* FIT account access */
+.auth-screen{min-height:100vh;background:radial-gradient(ellipse at 50% 20%,#1b2b1a 0%,#0b0f0c 48%,#090b0a 100%);display:grid;place-items:center;padding:24px;color:#eef3ee}
+.auth-card{width:min(100%,440px);padding:38px;background:#111713;border:1px solid #344133;border-radius:18px;box-shadow:0 24px 80px #0008}
+.auth-brand{display:flex;align-items:center;gap:9px;font:700 27px 'Space Grotesk';letter-spacing:-1px}
+.auth-brand>span:first-child{width:43px;height:43px;border-radius:12px;background:#263820;color:#b6f36b;display:grid;place-items:center}
+.auth-green{color:#b6f36b}.auth-kicker{font-size:9px;letter-spacing:1.6px;color:#b6f36b;margin-top:35px}
+.auth-card h1{font:600 29px 'Space Grotesk';letter-spacing:-1px;margin:10px 0}
+.auth-card>p{font-size:12px;line-height:1.7;color:#9aa69b;margin:0 0 25px}
+.auth-card form{display:grid;gap:12px}
+.auth-card form label{display:flex;align-items:center;gap:10px;padding:0 13px;border:1px solid #303b32;border-radius:8px;background:#0b100c;color:#92a18e}
+.auth-card form label:focus-within{border-color:#b6f36b}
+.auth-card form input{width:100%;min-width:0;border:0;outline:0;background:transparent;color:#f2f5f2;padding:14px 0;font-size:12px}
+.auth-submit{display:flex;justify-content:center;align-items:center;gap:10px;border:0;border-radius:8px;background:#b6f36b;color:#10160d;padding:14px;font-weight:700;font-size:12px;margin-top:7px}
+.auth-submit:disabled{opacity:.6}
+.auth-error{background:#351b1b;border:1px solid #713d3d;color:#ffb6b6;border-radius:7px;padding:10px;font-size:11px}
+.auth-switch{text-align:center;font-size:11px;color:#9ba69d;margin-top:22px}
+.auth-switch button{border:0;background:none;color:#b6f36b;font-weight:700}
+.auth-foot{text-align:center;border-top:1px solid #29332b;padding-top:17px;margin-top:25px;color:#68766b;font-size:9px}
+.auth-loading{min-height:100vh;display:flex;align-items:center;justify-content:center;gap:10px;background:#090b0a;color:#b6f36b;font:700 24px 'Space Grotesk'}
+.account-strip{height:34px;display:flex;align-items:center;justify-content:flex-end;gap:15px;padding:0 24px;background:#101611;border-bottom:1px solid #29332b;color:#8f9b90;font-size:10px}
+.account-strip b{color:#eaf1e9}.account-strip button{border:0;background:none;color:#b6f36b;font-size:10px}
+@media(max-width:520px){.auth-card{padding:28px 22px}.auth-card h1{font-size:25px}.account-strip{padding:0 15px}}
