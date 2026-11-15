@@ -10,6 +10,23 @@ export default function App(){
 const [page,S]=useState("Overview"),[mobile,M]=useState(false),[meals,SM]=useState(()=>read("fit-meals",[{id:1,name:"Oats & banana",cal:320,protein:14},{id:2,name:"Chicken & rice",cal:520,protein:42}])),[done,SD]=useState(()=>read("fit-done",[])),[goal,SG]=useState(()=>read("fit-goal","Muscle gain")),[level,SL]=useState(()=>read("fit-level","Beginner")),[calTarget,SC]=useState(()=>read("fit-cal",2000)),[proTarget,SP]=useState(()=>read("fit-pro",120)),[water,SW]=useState(()=>read("fit-water",0)),[ch,SH]=useState(()=>read("fit-ch",{})),[modal,SMo]=useState(false),[name,SN]=useState(""),[cal,SCal]=useState(""),[pro,SPro]=useState(""),[search,SS]=useState(""),[prompt,SPr]=useState(""),[reply,SR]=useState(""),[toast,ST]=useState("");
 const cals=meals.reduce((s,m)=>s+Number(m.cal||0),0),protein=meals.reduce((s,m)=>s+Number(m.protein||0),0);
 useEffect(()=>localStorage.setItem("fit-meals",JSON.stringify(meals)),[meals]);useEffect(()=>localStorage.setItem("fit-done",JSON.stringify(done)),[done]);useEffect(()=>localStorage.setItem("fit-goal",JSON.stringify(goal)),[goal]);useEffect(()=>localStorage.setItem("fit-level",JSON.stringify(level)),[level]);useEffect(()=>localStorage.setItem("fit-cal",JSON.stringify(calTarget)),[calTarget]);useEffect(()=>localStorage.setItem("fit-pro",JSON.stringify(proTarget)),[proTarget]);useEffect(()=>localStorage.setItem("fit-water",JSON.stringify(water)),[water]);useEffect(()=>localStorage.setItem("fit-ch",JSON.stringify(ch)),[ch]);
+useEffect(()=>{
+  const sync=async()=>{
+    const token=localStorage.getItem("fit-token");
+    if(!token)return;
+    const data={};
+    for(let i=0;i<localStorage.length;i++){
+      const key=localStorage.key(i);
+      if(key&&key.startsWith("fit-")&&key!=="fit-token"){
+        try{data[key]=JSON.parse(localStorage.getItem(key));}catch{}
+      }
+    }
+    try{await fetch(`${import.meta.env.VITE_API_URL||""}/api/data`,{method:"PUT",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({data})});}catch{}
+  };
+  const timer=setInterval(sync,5000);
+  sync();
+  return()=>clearInterval(timer);
+},[]);
 const notify=t=>{ST(t);setTimeout(()=>ST(""),2500)};
 const nav=[["Overview",Home],["Workouts",Dumbbell],["Nutrition",Apple],["Progress",BarChart3],["Discover",TrendingUp],["Challenges",Trophy],["FIT Coach",Sparkles],["Membership",Crown]];
 const filtered=plans.filter(p=>(level==="Beginner"?p.level!=="Advanced":level==="Intermediate"?p.level!=="Advanced":true));
