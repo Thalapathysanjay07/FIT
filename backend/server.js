@@ -104,7 +104,7 @@ app.post("/api/coach", ready, auth, async (req,res) => {
   if (!process.env.OPENAI_API_KEY) {
     return res.status(503).json({ error: "FIT Coach AI is not configured yet. Add OPENAI_API_KEY to the backend environment to enable it." });
   }
-  const baseUrl = (process.env.AI_BASE_URL || "https://api.openai.com/v1").replace(/\\/$/, "");
+  const baseUrl = (process.env.AI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
   const model = process.env.AI_MODEL || "gpt-4o-mini";
   try {
     const response = await fetch(baseUrl + "/chat/completions", {
