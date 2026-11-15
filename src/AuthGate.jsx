@@ -3,6 +3,15 @@ import { Activity, ArrowRight, LockKeyhole, Mail, UserRound } from "lucide-react
 import App from "./App.jsx";
 
 const API = import.meta.env.VITE_API_URL || "";
+function hydrateFitnessData(data) {
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (key?.startsWith("fit-") && key !== "fit-token") localStorage.removeItem(key);
+  }
+  Object.entries(data).forEach(([key, value]) => {
+    if (/^fit-[a-z0-9-]{1,60}$/.test(key)) localStorage.setItem(key, JSON.stringify(value));
+  });
+}
 const request = async (path, options = {}) => {
   const response = await fetch(`${API}/api${path}`, {
     ...options,
@@ -30,9 +39,7 @@ export default function AuthGate() {
     request("/auth/me", { headers: { Authorization: `Bearer ${token}` } })
       .then(async ({ user }) => {
         const stored = await request("/data", { headers: { Authorization: `Bearer ${token}` } });
-        Object.entries(stored.data || {}).forEach(([key, value]) => {
-          if (key.startsWith("fit-")) localStorage.setItem(key, JSON.stringify(value));
-        });
+        hydrateFitnessData(stored.data || {});
         if (alive) setSession({ user, token });
       })
       .catch(() => localStorage.removeItem("fit-token"))
@@ -49,9 +56,7 @@ export default function AuthGate() {
       });
       localStorage.setItem("fit-token", result.token);
       const stored = await request("/data", { headers: { Authorization: `Bearer ${result.token}` } });
-      Object.entries(stored.data || {}).forEach(([key, value]) => {
-        if (key.startsWith("fit-")) localStorage.setItem(key, JSON.stringify(value));
-      });
+      hydrateFitnessData(stored.data || {});
       setSession({ user: result.user, token: result.token });
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
