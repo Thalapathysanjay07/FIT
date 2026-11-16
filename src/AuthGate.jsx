@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Activity, ArrowRight, LockKeyhole, Mail, UserRound } from "lucide-react";
 import App from "./App.jsx";
 
