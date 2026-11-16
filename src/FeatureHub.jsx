@@ -1,4 +1,4 @@
-import {useEffect,useMemo,useState} from "react";
+import {useEffect,useMemo,useRef,useState} from "react";
 import {Activity,ArrowDownToLine,CalendarDays,CheckCircle2,Clock3,Dumbbell,Download,Flame,Footprints,HeartPulse,Search,Settings,ShieldCheck,Target,Timer,Trash2,UserRound,Wind,Zap} from "lucide-react";
 
 const read=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key))??fallback}catch{return fallback}};
@@ -59,10 +59,35 @@ function WalkingTracker({onToast}){
  const [status,setStatus]=useState("Not connected");
  const [busy,setBusy]=useState(false);
  const [heartRate,setHeartRate]=useState(null);
+ const pedometerRef=useRef(null);
+ const [tracking,setTracking]=useState(false);
+ useEffect(()=>()=>{if(pedometerRef.current){pedometerRef.current.remove?.();import("@capgo/capacitor-pedometer").then(({CapacitorPedometer})=>CapacitorPedometer.stopMeasurementUpdates()).catch(()=>{});}},[]);
  const distanceKm=steps*0.00075;
  const calories=Math.round(steps*0.04);
  useEffect(()=>localStorage.setItem("fit-steps-"+date,JSON.stringify(steps)),[steps,date]);
  useEffect(()=>localStorage.setItem("fit-step-goal",JSON.stringify(target)),[target]);
+ async function startPhoneTracking(){
+   try{
+     const {CapacitorPedometer}=await import("@capgo/capacitor-pedometer");
+     const available=await CapacitorPedometer.isAvailable();
+     if(!available.stepCounting)throw new Error("This phone does not expose a supported step sensor.");
+     const permission=await CapacitorPedometer.checkPermissions();
+     if(permission.activityRecognition!=="granted")await CapacitorPedometer.requestPermissions();
+     if(pedometerRef.current)await pedometerRef.current.remove();
+     pedometerRef.current=await CapacitorPedometer.addListener("measurement",data=>{
+       const count=Math.max(0,Number(data.numberOfSteps)||0);
+       setSteps(v=>Math.max(v,count));
+       setSource("Phone sensor");
+       localStorage.setItem("fit-step-source","Phone sensor");
+     });
+     await CapacitorPedometer.startMeasurementUpdates();
+     setTracking(true);
+     setStatus("Phone step sensor is tracking while FIT is active");
+   }catch(error){setStatus(error.message||"Phone step tracking is unavailable on this device.");}
+ }
+ async function stopPhoneTracking(){
+   try{const {CapacitorPedometer}=await import("@capgo/capacitor-pedometer");await CapacitorPedometer.stopMeasurementUpdates();await pedometerRef.current?.remove();pedometerRef.current=null;setTracking(false);setStatus("Phone step tracking paused.");}catch(error){setStatus(error.message||"Could not stop tracking.");}
+ }
  async function connectAndSync(){
    setBusy(true);setStatus("Checking Health Connect…");
    try{
@@ -108,7 +133,7 @@ function WalkingTracker({onToast}){
      <div className="walking-stats"><div><Footprints/><strong>{(distanceKm).toFixed(2)} km</strong><small>Estimated distance</small></div><div><Flame/><strong>{calories} kcal</strong><small>Estimated calories</small></div><div><HeartPulse/><strong>{heartRate?heartRate+" bpm":"—"}</strong><small>Average heart rate</small></div></div>
    </section>
    <div className="walking-grid">
-     <section className="panel"><div className="eyebrow">FITNESS BAND / PHONE SYNC</div><h3>Connect your device</h3><p className="tiny-note">FIT reads steps, distance and heart-rate data shared to Android Health Connect or Apple Health by supported devices. First sync your band in its own companion app, then allow FIT access.</p><button className="primary-btn" disabled={busy} onClick={connectAndSync}>{busy?"Connecting…":"Connect / Sync Health data"}</button><button className="outline-btn walking-settings" onClick={async()=>{try{const {Health}=await import("@capgo/capacitor-health");await Health.openHealthConnectSettings();}catch{setStatus("Health Connect settings are available in the installed Android app.");}}}>Open Health Connect settings</button><p className="tiny-note">{status}</p></section>
+     <section className="panel"><div className="eyebrow">FITNESS BAND / PHONE SYNC</div><h3>Connect your device</h3><p className="tiny-note">FIT can count steps from a supported phone sensor and read steps, distance and heart-rate data shared to Android Health Connect or Apple Health by supported bands. First sync your band in its own companion app, then allow FIT access.</p><button className="primary-btn" disabled={busy} onClick={connectAndSync}>{busy?"Connecting…":"Connect / Sync Health data"}</button><button className="outline-btn walking-settings" onClick={tracking?stopPhoneTracking:startPhoneTracking}>{tracking?"Pause phone step tracking":"Start phone step tracking"}</button><button className="outline-btn walking-settings" onClick={async()=>{try{const {Health}=await import("@capgo/capacitor-health");await Health.openHealthConnectSettings();}catch{setStatus("Health Connect settings are available in the installed Android app.");}}}>Open Health Connect settings</button><p className="tiny-note">{status}</p></section>
      <section className="panel"><div className="eyebrow">MANUAL STEP ENTRY</div><h3>Add steps</h3><form className="walking-manual" onSubmit={addManual}><label>Steps to add<input type="number" min="1" max="100000" value={manual} onChange={e=>setManual(e.target.value)} placeholder="e.g. 2500" required/></label><button className="outline-btn">Add steps</button></form><p className="tiny-note">Manual entries are kept separate from verified sensor readings in the source label.</p></section>
    </div>
    <p className="tiny-note">Distance and calories shown for manual step entries are estimates using a general stride and energy factor; actual values vary by height, pace and body weight. Health data access is optional and can be revoked in device settings.</p>
