@@ -1,5 +1,5 @@
 import {useEffect,useMemo,useState} from "react";
-import {Activity,ArrowDownToLine,CalendarDays,CheckCircle2,Clock3,Dumbbell,Download,HeartPulse,Search,Settings,ShieldCheck,Target,Timer,Trash2,UserRound,Wind,Zap} from "lucide-react";
+import {Activity,ArrowDownToLine,CalendarDays,CheckCircle2,Clock3,Dumbbell,Download,Flame,Footprints,HeartPulse,Search,Settings,ShieldCheck,Target,Timer,Trash2,UserRound,Wind,Zap} from "lucide-react";
 
 const read=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key))??fallback}catch{return fallback}};
 const catalog=[
