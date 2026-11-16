@@ -49,6 +49,72 @@ const sessions=[
  {title:"Upper body + core",focus:"Strength",items:["Incline push-up","Dumbbell row","Dumbbell shoulder press","Bird dog","Plank"]},
  {title:"Conditioning + mobility",focus:"Conditioning",items:["Jumping jack","Mountain climber","Cat-cow mobility","Dead bug"]}
 ];
+
+function WalkingTracker({onToast}){
+ const date=todayKey();
+ const [steps,setSteps]=useState(()=>read("fit-steps-"+date,0));
+ const [target,setTarget]=useState(()=>read("fit-step-goal",8000));
+ const [manual,setManual]=useState("");
+ const [source,setSource]=useState(()=>read("fit-step-source","Manual"));
+ const [status,setStatus]=useState("Not connected");
+ const [busy,setBusy]=useState(false);
+ const [heartRate,setHeartRate]=useState(null);
+ const distanceKm=steps*0.00075;
+ const calories=Math.round(steps*0.04);
+ useEffect(()=>localStorage.setItem("fit-steps-"+date,JSON.stringify(steps)),[steps,date]);
+ useEffect(()=>localStorage.setItem("fit-step-goal",JSON.stringify(target)),[target]);
+ async function connectAndSync(){
+   setBusy(true);setStatus("Checking Health Connect…");
+   try{
+     const {Health}=await import("@capgo/capacitor-health");
+     const availability=await Health.isAvailable();
+     if(!availability.available)throw new Error(availability.reason||"Health Connect is available only in the installed mobile app, not the website preview.");
+     await Health.requestAuthorization({read:["steps","distance","calories","heartRate"],write:[]});
+     const start=new Date();start.setHours(0,0,0,0);
+     const end=new Date();
+     const [stepData,distanceData,heartData]=await Promise.all([
+       Health.readSamples({dataType:"steps",startDate:start.toISOString(),endDate:end.toISOString(),limit:1000}),
+       Health.readSamples({dataType:"distance",startDate:start.toISOString(),endDate:end.toISOString(),limit:1000}),
+       Health.readSamples({dataType:"heartRate",startDate:start.toISOString(),endDate:end.toISOString(),limit:1000})
+     ]);
+     const total=(stepData.samples||[]).reduce((sum,s)=>sum+Number(s.value||0),0);
+     const distance=(distanceData.samples||[]).reduce((sum,s)=>sum+Number(s.value||0),0);
+     const hrs=(heartData.samples||[]).map(s=>Number(s.value)).filter(n=>n>0);
+     setSteps(Math.round(total));
+     if(hrs.length)setHeartRate(Math.round(hrs.reduce((a,b)=>a+b,0)/hrs.length));
+     setSource("Health Connect");
+     localStorage.setItem("fit-step-source","Health Connect");
+     localStorage.setItem("fit-distance-"+date,JSON.stringify(distance));
+     setStatus("Connected · synced just now");
+     onToast?.("Walking activity synced from Health Connect");
+   }catch(error){
+     setStatus(error.message||"Could not connect. Install/update the FIT Android app and try again.");
+   }finally{setBusy(false);}
+ }
+ function addManual(e){
+   e.preventDefault();
+   const value=Number(manual);
+   if(!Number.isFinite(value)||value<1||value>100000)return;
+   setSteps(v=>v+Math.round(value));setSource("Manual");setManual("");
+   localStorage.setItem("fit-step-source","Manual");
+   onToast?.("Steps added");
+ }
+ return <div className="feature-page walking-page">
+   <div className="section-heading"><div><div className="eyebrow">DAILY ACTIVITY</div><h2>Walking Tracker</h2><p className="muted">Your daily movement, synced with supported health apps and fitness bands.</p></div><span className="feature-tag"><Footprints size={14}/> {source}</span></div>
+   <section className="panel walking-main">
+     <div className="walking-number">{steps.toLocaleString("en-IN")}<small> steps today</small></div>
+     <div className="progress-track walking-progress"><div className="progress-fill" style={{width:`${Math.min(100,steps/Math.max(1,target)*100)}%`}}/></div>
+     <div className="walking-goal-row"><span>{Math.min(100,Math.round(steps/Math.max(1,target)*100))}% of daily goal</span><label>Goal <input aria-label="Daily step goal" type="number" min="1000" max="50000" step="500" value={target} onChange={e=>setTarget(Math.max(1000,Number(e.target.value)||1000))}/> steps</label></div>
+     <div className="walking-stats"><div><Footprints/><strong>{(distanceKm).toFixed(2)} km</strong><small>Estimated distance</small></div><div><Flame/><strong>{calories} kcal</strong><small>Estimated calories</small></div><div><HeartPulse/><strong>{heartRate?heartRate+" bpm":"—"}</strong><small>Average heart rate</small></div></div>
+   </section>
+   <div className="walking-grid">
+     <section className="panel"><div className="eyebrow">FITNESS BAND / PHONE SYNC</div><h3>Connect your device</h3><p className="tiny-note">FIT reads steps, distance and heart-rate data shared to Android Health Connect or Apple Health by supported devices. First sync your band in its own companion app, then allow FIT access.</p><button className="primary-btn" disabled={busy} onClick={connectAndSync}>{busy?"Connecting…":"Connect / Sync Health data"}</button><button className="outline-btn walking-settings" onClick={async()=>{try{const {Health}=await import("@capgo/capacitor-health");await Health.openHealthConnectSettings();}catch{setStatus("Health Connect settings are available in the installed Android app.");}}}>Open Health Connect settings</button><p className="tiny-note">{status}</p></section>
+     <section className="panel"><div className="eyebrow">MANUAL STEP ENTRY</div><h3>Add steps</h3><form className="walking-manual" onSubmit={addManual}><label>Steps to add<input type="number" min="1" max="100000" value={manual} onChange={e=>setManual(e.target.value)} placeholder="e.g. 2500" required/></label><button className="outline-btn">Add steps</button></form><p className="tiny-note">Manual entries are kept separate from verified sensor readings in the source label.</p></section>
+   </div>
+   <p className="tiny-note">Distance and calories shown for manual step entries are estimates using a general stride and energy factor; actual values vary by height, pace and body weight. Health data access is optional and can be revoked in device settings.</p>
+ </div>;
+}
+
 function todayKey(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
 export default function FeatureHub({page,onToast,onSignOut,user,goal,level,onGoalChange,onLevelChange,onAddMeal}){
  const [profile,setProfile]=useState(()=>read("fit-profile",{name:user?.name||"",age:"",heightCm:"",weightKg:"",targetWeightKg:"",goal:goal||"Weight loss",level:level||"Beginner",equipment:"Bodyweight",dietStyle:"Mixed diet",daysPerWeek:3,sessionMinutes:30}));
@@ -66,6 +132,8 @@ export default function FeatureHub({page,onToast,onSignOut,user,goal,level,onGoa
  const toggleSession=(day)=>{const key=todayKey()+"-"+day;setCompleted(v=>({...v,[key]:!v[key]}));onToast?.("Workout schedule updated")};
  const exportData=()=>{const data={exportedAt:new Date().toISOString(),profile,sessionLog:completed,fitnessData:Object.fromEntries(Object.keys(localStorage).filter(k=>k.startsWith("fit-")&&k!=="fit-token").map(k=>[k,read(k,null)]))};const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="fit-my-data.json";a.click();URL.revokeObjectURL(url);onToast?.("Your data export is ready")};
  const deleteAccount=async()=>{const password=window.prompt("Enter your account password to permanently delete your FIT account and synced data.");if(password===null)return;if(!password)return onToast?.("Password is required");try{const response=await fetch(`${import.meta.env.VITE_API_URL||""}/api/account`,{method:"DELETE",headers:{"Content-Type":"application/json",Authorization:`Bearer ${localStorage.getItem("fit-token")}`},body:JSON.stringify({password})});const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||"Account deletion failed");localStorage.clear();window.location.reload()}catch(error){onToast?.(error.message)}};
+
+ if(page==="Walking Tracker")return <WalkingTracker onToast={onToast}/>;
  if(page==="Profile")return <div className="feature-page"><div className="section-heading"><div><div className="eyebrow">YOUR FITNESS IDENTITY</div><h2>Personal profile</h2><p className="muted">Use these details to shape your training suggestions.</p></div></div><section className="panel feature-form"><div className="feature-form-grid"><label>Display name<input value={profile.name} maxLength="60" onChange={e=>setProfile({...profile,name:e.target.value})} placeholder="Your name"/></label><label>Age<input type="number" min="13" max="100" value={profile.age} onChange={e=>setProfile({...profile,age:e.target.value})} placeholder="Age"/></label><label>Height (cm)<input type="number" min="100" max="230" value={profile.heightCm} onChange={e=>setProfile({...profile,heightCm:e.target.value})} placeholder="Height"/></label><label>Current weight (kg)<input type="number" min="25" max="350" step="0.1" value={profile.weightKg} onChange={e=>setProfile({...profile,weightKg:e.target.value})} placeholder="Weight"/></label><label>Target weight (kg)<input type="number" min="25" max="350" step="0.1" value={profile.targetWeightKg} onChange={e=>setProfile({...profile,targetWeightKg:e.target.value})} placeholder="Target weight"/></label><label>Fitness goal<select value={profile.goal} onChange={e=>{setProfile({...profile,goal:e.target.value});onGoalChange?.(e.target.value)}}><option>Weight loss</option><option>Muscle gain</option><option>Fitness maintenance</option></select></label><label>Experience<select value={profile.level} onChange={e=>{setProfile({...profile,level:e.target.value});onLevelChange?.(e.target.value)}}><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></label><label>Available equipment<select value={profile.equipment} onChange={e=>setProfile({...profile,equipment:e.target.value})}><option>Bodyweight</option><option>Dumbbells</option><option>Full gym</option><option>Resistance bands</option></select></label><label>Diet preference<select value={profile.dietStyle||"Mixed diet"} onChange={e=>setProfile({...profile,dietStyle:e.target.value})}><option>Mixed diet</option><option>Vegetarian</option><option>Vegan</option></select></label><label>Training days / week<select value={profile.daysPerWeek} onChange={e=>setProfile({...profile,daysPerWeek:Number(e.target.value)})}>{[2,3,4].map(n=><option key={n} value={n}>{n} days</option>)}</select></label><label>Session duration<select value={profile.sessionMinutes} onChange={e=>setProfile({...profile,sessionMinutes:Number(e.target.value)})}>{[15,20,30,40,45,60,75].map(n=><option key={n} value={n}>{n} minutes</option>)}</select></label></div><div className="profile-metrics"><div><small>Estimated BMI</small><strong>{bmi?bmi.toFixed(1):"—"}</strong><span>Screening estimate only; not a diagnosis.</span></div><div><small>Current goal</small><strong>{profile.goal}</strong><span>{profile.daysPerWeek} training days · {profile.sessionMinutes} min sessions</span></div></div><button className="primary-btn" onClick={()=>onToast?.("Profile saved")}>Save profile</button></section></div>;
  if(page==="Meal Planner")return <div className="feature-page"><div className="section-heading"><div><div className="eyebrow">DAILY FOOD IDEAS</div><h2>Personalized meal planner</h2><p className="muted">Sample meal ideas based on your selected food preference and fitness goal.</p></div><span className="feature-tag">{profile.goal}</span></div><section className="panel meal-plan-settings"><label className="setting-field">Diet preference<select value={profile.dietStyle||"Mixed diet"} onChange={e=>setProfile({...profile,dietStyle:e.target.value})}><option>Mixed diet</option><option>Vegetarian</option><option>Vegan</option></select></label><p className="tiny-note">Portions and nutrition values are approximate examples. Adjust to your appetite, budget, culture and health needs.</p></section><div className="meal-plan-grid">{mealIdeas[profile.dietStyle||"Mixed diet"].map(meal=><article className="panel meal-plan-card" key={meal.slot}><div className="eyebrow">{meal.slot}</div><h3>{meal.name}</h3><p>{meal.why}</p><div className="meal-plan-macros"><span>{meal.cal} kcal</span><span>{meal.protein} g protein</span></div><button className="outline-btn" onClick={()=>onAddMeal?.(meal)}>Add to today's food log</button></article>)}</div><p className="tiny-note">FIT provides general nutrition education, not a prescribed diet. Consult a registered dietitian for medical or condition-specific nutrition needs.</p></div>;
  if(page==="Plan")return <div className="feature-page"><div className="section-heading"><div><div className="eyebrow">ADAPTIVE TRAINING</div><h2>Your weekly workout plan</h2><p className="muted">A starter schedule based on your goal and availability. Adjust intensity to your ability.</p></div><span className="feature-tag"><Target size={14}/>{profile.goal}</span></div><div className="plan-summary-grid"><div className="panel"><small>Training frequency</small><strong>{profile.daysPerWeek} days / week</strong></div><div className="panel"><small>Session length</small><strong>{profile.sessionMinutes} minutes</strong></div><div className="panel"><small>Experience</small><strong>{profile.level}</strong></div></div><div className="weekly-plan">{weekly.map(({day,session})=>{const done=!!completed[todayKey()+"-"+day];const adaptedItems=session?session.items.map(name=>profile.equipment==="Bodyweight"?(name==="Dumbbell row"?"Prone Y-T-W":name==="Dumbbell shoulder press"?"Incline push-up":name):profile.equipment==="Resistance bands"?(name==="Dumbbell row"?"Resistance-band row":name==="Dumbbell shoulder press"?"Band overhead press":name):name):[];return <article className="panel weekly-day" key={day}><div className="weekly-day-head"><div><small>{day.toUpperCase()}</small><h3>{session?session.title:"Recovery / Rest day"}</h3></div>{session?<span className={done?"feature-tag completed":"feature-tag"}>{done?"COMPLETED":session.focus}</span>:<span className="feature-tag">RECOVERY</span>}</div>{session?<><div className="plan-exercises">{adaptedItems.map(name=><div key={name}><Dumbbell size={15}/><span>{name}</span><small>{profile.level==="Beginner"?"2 sets · ":profile.level==="Advanced"?"4 sets · ":""}{catalog.find(x=>x.name===name)?.sets}</small></div>)}</div><button className={done?"done-btn":"outline-btn"} onClick={()=>toggleSession(day)}>{done?"Undo completion":"Mark today's session complete"}</button></>:<p className="muted">Take an easy walk or do gentle mobility if it feels good.</p>}</article>})}</div><div className="panel rest-timer"><div><div className="eyebrow">REST TIMER</div><h3>{String(Math.floor(rest/60)).padStart(2,"0")}:{String(rest%60).padStart(2,"0")}</h3><p className="muted">Use between sets; choose a comfortable recovery interval.</p></div><div className="timer-actions"><button className="outline-btn" onClick={()=>{setRest(60);setTimerOn(false)}}>60 sec</button><button className="outline-btn" onClick={()=>{setRest(90);setTimerOn(false)}}>90 sec</button><button className="outline-btn" onClick={()=>setTimerOn(v=>!v)} disabled={rest===0}>{timerOn?"Pause":"Start"}</button><button className="outline-btn" onClick={()=>{setRest(0);setTimerOn(false)}}>Reset</button></div></div></div>;
