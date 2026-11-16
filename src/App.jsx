@@ -77,7 +77,7 @@ async function ask(e){
     const response=await fetch(`${import.meta.env.VITE_API_URL||""}/api/coach`,{
       method:"POST",
       headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},
-      body:JSON.stringify({question:question+"\n\nPersonal FIT context (use this to personalize food and coaching suggestions): "+JSON.stringify({goal,level,profile:read("fit-profile",{}),todayMeals:meals,calorieTarget:calTarget,proteinTarget:proTarget,waterGlasses:water,walkingSteps:read("fit-steps-"+dayKey(),0),recentWeights:weights.slice(-5)})})
+      body:JSON.stringify({question:(question.slice(0,600)+"\n\nFIT context: "+JSON.stringify({goal,level,profile:read("fit-profile",{}),meals:meals.slice(-3).map(m=>({name:m.name,cal:m.cal,protein:m.protein})),calorieTarget:calTarget,proteinTarget:proTarget,water,steps:read("fit-steps-"+dayKey(),0),weights:weights.slice(-3).map(w=>w.kg)})).slice(0,1190)})
     });
     const data=await response.json().catch(()=>({}));
     if(!response.ok)throw new Error(data.error||"FIT Coach is unavailable right now.");
