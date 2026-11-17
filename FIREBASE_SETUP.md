@@ -99,6 +99,12 @@ There is no privileged payment-review API in the Spark-only architecture. In the
 
 Do not expose Firebase Console owner credentials or grant project-owner roles to ordinary users.
 
+### User data backup and recovery
+
+FIT Settings → **Export my fitness data** downloads a user-controlled JSON backup. The file includes a schema version, export timestamp, account identifier, local fitness state, and the Firebase records the signed-in user is permitted to read. Store this file somewhere private and secure; it contains personal and payment-request information.
+
+This is a portable backup/export only, not an automatic scheduled backup and not a one-click restore. Do not upload the file publicly or share it with support unless sensitive fields have been removed. Restoring data must be handled carefully after verifying the account UID and reviewing the JSON; never import another user's membership or payment entitlement from a client-side backup. Firebase Spark does not provide a trusted scheduled server-side restore workflow in this app.
+
 ### Important remaining boundaries
 
 - Existing PostgreSQL accounts are not automatically migrated to Firebase Authentication. Users must create Firebase accounts; legacy password hashes cannot be imported as Firebase passwords. Historical PostgreSQL records need a verified UID-linking migration before old accounts/data can be safely imported.
