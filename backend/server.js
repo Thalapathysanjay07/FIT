@@ -130,7 +130,30 @@ app.delete("/api/account", ready, auth, async (req,res) => {
     res.status(500).json({ error:"Could not delete the account. Please try again." });
   }
 });
+async function activeMembership(userId) {
+  const result = await pool.query(
+    "SELECT plan_code, starts_at, expires_at FROM memberships WHERE user_id=$1 AND starts_at<=NOW() AND expires_at>NOW()",
+    [userId]
+  );
+  return result.rows[0] || null;
+}
+app.get("/api/membership/access", ready, auth, async (req,res) => {
+  try {
+    const membership = await activeMembership(req.user.sub);
+    res.set("Cache-Control","no-store");
+    res.json({ tier:membership?"pro":"free", isPremium:!!membership, membership });
+  } catch(error) {
+    console.error("Membership access check failed:",error.message);
+    res.status(503).json({ error:"Could not verify membership." });
+  }
+});
 app.post("/api/coach", ready, auth, async (req,res) => {
+  const mode = String(req.body?.mode || "chat");
+  if (!["chat","diet","workout","weekly-report"].includes(mode)) return res.status(400).json({error:"Choose a valid coach mode."});
+  if (mode !== "chat") {
+    const membership = await activeMembership(req.user.sub).catch(()=>null);
+    if (!membership) return res.status(403).json({error:"FIT Pro is required for personalised AI plans and weekly reports.",code:"PREMIUM_REQUIRED"});
+  }
   const question = String(req.body?.question || "").trim();
   if (question.length < 2 || question.length > 1200) {
     return res.status(400).json({ error: "Ask a question between 2 and 1,200 characters." });
@@ -152,7 +175,7 @@ app.post("/api/coach", ready, auth, async (req,res) => {
         temperature: 0.4,
         max_tokens: 500,
         messages: [
-          { role: "system", content: "You are FIT Coach, a supportive fitness, food-planning and wellness education assistant. Use the FIT profile and recent logs included in the user message (goal, experience, height, weight, diet preference, food log, calories, protein, water and steps) to personalize answers. Help create practical Indian-food meal plans, simple recipes, portion suggestions, approximate calorie/protein estimates, grocery lists, affordable food swaps, workout guidance and habit coaching. Clearly label nutrition estimates as approximate and never invent verified food database values. Ask only for essential missing context. Be concise, practical and non-judgmental. Do not diagnose, prescribe treatment, recommend extreme diets, guarantee results, or provide dangerous exercise instructions. For injuries, pregnancy, chronic conditions, eating disorders, or concerning symptoms, advise the user to consult a qualified healthcare professional. Never claim to be a doctor or certified personal trainer. Distinguish general information from individualized medical advice." },
+          { role: "system", content: "You are FIT Coach. Requested mode: " + mode + ". Use the supplied profile, goal, experience, height, weight, diet preference, food log, calorie/protein targets, water, steps and training availability. For diet mode, return a practical Indian-food day plan with meal timing, portions, approximate calories/protein per meal, affordable substitutions and a grocery list. For workout mode, create a safe weekly plan matching goal, level, equipment, days and session duration; include warm-up, exercises, sets, reps, rest and recovery. For weekly-report mode, summarise logged trends, wins, gaps and 2-3 achievable next-week actions; never fabricate missing data. Explain assumptions and mark nutrition/energy estimates as approximate. Do not diagnose, prescribe treatment, recommend extreme diets, guarantee results or give dangerous exercise instructions. For injuries, pregnancy, chronic conditions, eating disorders or concerning symptoms, advise consulting a qualified healthcare professional. Never claim to be a doctor or certified personal trainer. Be concise, practical and non-judgmental." },
           { role: "user", content: question }
         ]
       }),
