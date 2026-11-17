@@ -12,6 +12,14 @@ FIT is being migrated to Firebase's **Spark (no-cost) plan**. Do not link a bill
 
 Create the Firebase project and choose **Mumbai (asia-south1)** for Firestore before creating the database. Firestore location cannot be changed later.
 
+## Create and configure the Firebase project
+
+1. In Firebase Console, create the FIT project (or select the existing FIT project).
+2. Under Build → Authentication → Get started, enable **Email/Password**.
+3. Under Build → Firestore Database, create the production database in **Mumbai (asia-south1)**. Choose production mode.
+4. Under Authentication → Settings → Authorized domains, add the deployed Netlify domain (for example, `uzhavagam.netlify.app` is NOT the FIT domain; use the actual FIT site domain) and any custom FIT domain.
+5. Register a Web app under Project settings → General → Your apps.
+
 ## Web app configuration
 
 Register a Web app in Firebase Console → Project settings → General → Your apps. Copy its public web configuration into the frontend hosting environment:
