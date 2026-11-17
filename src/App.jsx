@@ -1,4 +1,5 @@
-import { doc, setDoc } from "firebase/firestore";
+import { addDoc, collection, doc, getDoc, getDocs, query, setDoc, where } from "firebase/firestore";
+import QRCode from "qrcode";
 import { firebaseAuth, firestoreDb } from "./firebase.js";
 import {useEffect,useState} from "react";
 import FeatureHub from "./FeatureHub.jsx";
@@ -77,35 +78,67 @@ useEffect(()=>{
 },[]);
 useEffect(()=>{
   if(page!=="Membership")return;
-  const token=localStorage.getItem("fit-token");
-  const headers=token?{Authorization:`Bearer ${token}`}:{};
-  SPaymentError("");SQrData("");
-  Promise.all([
-    fetch(`${import.meta.env.VITE_API_URL||""}/api/membership/config`).then(r=>r.json()),
-    token?fetch(`${import.meta.env.VITE_API_URL||""}/api/membership/me`,{headers}).then(r=>r.ok?r.json():{membership:null,payments:[]}):Promise.resolve({membership:null,payments:[]}),
-    fetch(`${import.meta.env.VITE_API_URL||""}/api/membership/qr?plan=${selectedPlan}`).then(async r=>{const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"QR is unavailable");return d;})
-  ]).then(([config,status,qr])=>{SPaymentConfig(config);SMembership(status.membership||null);SPayments(status.payments||[]);SQrData(qr.qrDataUrl||"");})
-    .catch(error=>{SPaymentError(error.message||"Could not load membership payment settings.");});
+  let active=true;SPaymentError("");SQrData("");
+  (async()=>{
+    try{
+      if(import.meta.env.VITE_USE_FIREBASE_AUTH==="true"){
+        const currentUser=firebaseAuth?.currentUser;
+        if(!currentUser||!firestoreDb)throw new Error("Please sign in to Firebase again.");
+        const upiId=String(import.meta.env.VITE_FIT_UPI_ID||"").trim();
+        const merchantName=String(import.meta.env.VITE_FIT_MERCHANT_NAME||"FIT").trim();
+        SPaymentConfig({upiId,merchantName,plans:[{code:"quarterly",name:"FIT Pro 3 Months",amount:49,days:90}]});
+        if(/^[A-Za-z0-9._-]{2,256}@[A-Za-z0-9.-]{2,64}$/.test(upiId)){
+          const uri="upi://pay?"+new URLSearchParams({pa:upiId,pn:merchantName,am:"49.00",cu:"INR",tn:"FIT Pro 3 Months"}).toString();
+          SQrData(await QRCode.toDataURL(uri,{errorCorrectionLevel:"M",margin:2,width:280}));
+        }
+        const [memberSnap,paymentSnap]=await Promise.all([
+          getDoc(doc(firestoreDb,"memberships",currentUser.uid)),
+          getDocs(query(collection(firestoreDb,"paymentRequests"),where("userId","==",currentUser.uid)))
+        ]);
+        const member=memberSnap.exists()?memberSnap.data():null;
+        SMembership(member?{...member,expires_at:member.expiresAt,starts_at:member.startsAt}:null);
+        SPayments(paymentSnap.docs.map(d=>({id:d.id,...d.data(),created_at:d.data().createdAt})).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at))));
+      }else{
+        const token=localStorage.getItem("fit-token");const headers=token?{Authorization:`Bearer ${token}`}:{};
+        const [config,status,qr]=await Promise.all([
+          fetch(`${import.meta.env.VITE_API_URL||""}/api/membership/config`).then(r=>r.json()),
+          token?fetch(`${import.meta.env.VITE_API_URL||""}/api/membership/me`,{headers}).then(r=>r.ok?r.json():{membership:null,payments:[]}):Promise.resolve({membership:null,payments:[]}),
+          fetch(`${import.meta.env.VITE_API_URL||""}/api/membership/qr?plan=${selectedPlan}`).then(async r=>{const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"QR is unavailable");return d;})
+        ]);
+        if(!active)return;SPaymentConfig(config);SMembership(status.membership||null);SPayments(status.payments||[]);SQrData(qr.qrDataUrl||"");
+      }
+    }catch(error){if(active)SPaymentError(error.message||"Could not load membership payment settings.");}
+  })();
+  return()=>{active=false};
 },[page,selectedPlan]);
+
 async function submitUpiReference(e){
   e.preventDefault();SPaymentError("");SPaymentMessage("");
-  const token=localStorage.getItem("fit-token");
-  if(!token){SPaymentError("Please sign in again.");return;}
   if(!utr.trim()){SPaymentError("Enter the UPI transaction reference/UTR.");return;}
+  if(!/^[A-Za-z0-9-]{8,80}$/.test(utr.trim().replace(/\\s/g,""))){SPaymentError("Enter a valid UTR (8–80 letters or numbers).");return;}
   SPaymentBusy(true);
   try{
-    const response=await fetch(`${import.meta.env.VITE_API_URL||""}/api/payments/upi-request`,{
-      method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},
-      body:JSON.stringify({planCode:selectedPlan,utr:utr.trim()})
-    });
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok)throw new Error(data.error||"Could not submit payment reference.");
-    SPaymentMessage(data.message||"Submitted for manual verification.");SUTR("");
-    const status=await fetch(`${import.meta.env.VITE_API_URL||""}/api/membership/me`,{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json());
-    SMembership(status.membership||null);SPayments(status.payments||[]);
+    if(import.meta.env.VITE_USE_FIREBASE_AUTH==="true"){
+      const currentUser=firebaseAuth?.currentUser;if(!currentUser||!firestoreDb)throw new Error("Please sign in to Firebase again.");
+      const cleanUtr=utr.trim().replace(/\\s/g,"");
+      const existing=await getDocs(query(collection(firestoreDb,"paymentRequests"),where("utr","==",cleanUtr)));
+      if(!existing.empty)throw new Error("This UTR has already been submitted.");
+      await addDoc(collection(firestoreDb,"paymentRequests"),{userId:currentUser.uid,planCode:"quarterly",amountPaise:4900,utr:cleanUtr,status:"pending",createdAt:new Date().toISOString()});
+      SPaymentMessage("Payment reference submitted. FIT Pro activates only after the owner verifies the payment.");SUTR("");
+      const history=await getDocs(query(collection(firestoreDb,"paymentRequests"),where("userId","==",currentUser.uid)));
+      SPayments(history.docs.map(d=>({id:d.id,...d.data(),created_at:d.data().createdAt})).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at))));
+    }else{
+      const token=localStorage.getItem("fit-token");if(!token)throw new Error("Please sign in again.");
+      const response=await fetch(`${import.meta.env.VITE_API_URL||""}/api/payments/upi-request`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({planCode:selectedPlan,utr:utr.trim()})});
+      const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||"Could not submit payment reference.");
+      SPaymentMessage(data.message||"Submitted for manual verification.");SUTR("");
+      const status=await fetch(`${import.meta.env.VITE_API_URL||""}/api/membership/me`,{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json());
+      SMembership(status.membership||null);SPayments(status.payments||[]);
+    }
   }catch(error){SPaymentError(error.message||"Payment submission failed.");}
   finally{SPaymentBusy(false);}
 }
+
 const notify=t=>{ST(t);setTimeout(()=>ST(""),2500)};
 const nav=[["Overview",Home],["Workouts",Dumbbell],["Plan",CalendarDays],["Exercise Library",Search],["Nutrition",Apple],["Meal Planner",Utensils],["Progress",BarChart3],["Discover",TrendingUp],["Challenges",Trophy],["Walking Tracker",Footprints],["Activity & Rewards",Trophy],["FIT Coach",Sparkles],["Profile",Users],["Settings",Wallet],["Membership",Crown],["Admin",Users]];
 const filtered=plans.filter(p=>(level==="Beginner"?p.level!=="Advanced":level==="Intermediate"?p.level!=="Advanced":true));
