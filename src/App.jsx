@@ -155,7 +155,7 @@ async function ask(e){
   const question=prompt.trim();
   if(!question||coachLoading)return;
   const token=localStorage.getItem("fit-token");
-  if(!token){SR("Please sign in again to use FIT Coach.");return;}
+  if(!token&&!(import.meta.env.VITE_USE_FIREBASE_AUTH==="true"&&firebaseAuth?.currentUser)){SR("Please sign in again to use FIT Coach.");return;}
   SCoachLoading(true);SR("");
   try{
     if(import.meta.env.VITE_USE_FIREBASE_AUTH==="true"){
