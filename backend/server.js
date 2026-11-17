@@ -214,7 +214,7 @@ const membershipPlans = {
   quarterly: { name: "FIT Pro 3 Months", amountPaise: 4900, days: 90 }
 };
 app.get("/api/membership/qr", ready, async (req,res) => {
-  const planCode=String(req.query.plan||"monthly");
+  const planCode=String(req.query.plan||"quarterly");
   const plan=membershipPlans[planCode];
   const upiId=String(process.env.FIT_UPI_ID||"");
   if(!plan)return res.status(400).json({error:"Choose a valid membership plan."});
