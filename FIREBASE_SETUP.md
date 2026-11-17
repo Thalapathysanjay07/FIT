@@ -62,3 +62,11 @@ The backend now exposes these Firebase ID-token-protected endpoints:
 Send the Firebase ID token as `Authorization: Bearer <ID_TOKEN>`. The server verifies token revocation and derives the UID from the verified token; never accept a UID supplied in the request body as the account identity.
 
 **Important:** The current sign-in screen and several app features still use the legacy PostgreSQL/JWT endpoints. These new endpoints are an additive migration layer and do not mean the frontend has switched to Firebase yet. Do not remove the legacy database until AuthGate, membership, payments, activity, coach, and account deletion have all been migrated and tested.
+
+## Firebase Authentication frontend status
+
+A separate `src/FirebaseAuthGate.jsx` now implements Firebase email/password registration, sign-in, password-reset email, persistent auth-state handling, profile creation, and initial Firestore fitness-data hydration. The app entry point can select it using `VITE_USE_FIREBASE_AUTH=true`.
+
+**Keep `VITE_USE_FIREBASE_AUTH=false` for now.** The membership, UPI payment review, FIT Coach, activity/leaderboard, and account deletion flows still call legacy PostgreSQL/JWT endpoints. Enabling Firebase sign-in before those routes are migrated will cause those parts of the app to fail. The Firebase auth gate and Firebase data sync are staged but not yet the production default.
+
+When enabled after the remaining API migration, set `VITE_USE_FIREBASE_AUTH=true` in the frontend host environment and redeploy. The Firebase Web app settings must also be configured, and Email/Password must be enabled under Firebase Console → Authentication → Sign-in method.
