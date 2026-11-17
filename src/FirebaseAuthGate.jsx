@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Activity, ArrowRight, LockKeyhole, Mail, UserRound } from "lucide-react";
-import { createUserWithEmailAndPassword, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, EmailAuthProvider, reauthenticateWithCredential, deleteUser } from "firebase/auth";
+import { createUserWithEmailAndPassword, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, EmailAuthProvider, reauthenticateWithCredential, deleteUser, sendEmailVerification, reload } from "firebase/auth";
 import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, where, writeBatch } from "firebase/firestore";
 import App from "./App.jsx";
 import { firebaseAuth, firestoreDb, isFirebaseConfigured } from "./firebase.js";
@@ -25,6 +25,7 @@ export default function FirebaseAuthGate() {
   const [checking, setChecking] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [verificationEmail, setVerificationEmail] = useState("");
 
   useEffect(() => {
     if (!firebaseAuth || !firestoreDb) {
@@ -34,7 +35,14 @@ export default function FirebaseAuthGate() {
     }
     return onAuthStateChanged(firebaseAuth, async (nextUser) => {
       try {
+        if (nextUser && !nextUser.emailVerified) {
+          setVerificationEmail(nextUser.email || "");
+          setUser(null);
+          setChecking(false);
+          return;
+        }
         if (nextUser) {
+          setVerificationEmail("");
           const profileRef = doc(firestoreDb, "users", nextUser.uid);
           const profileSnap = await getDoc(profileRef);
           if (!profileSnap.exists()) {
@@ -72,6 +80,9 @@ export default function FirebaseAuthGate() {
         if (name.trim().length < 2 || name.trim().length > 80) throw new Error("Enter a name between 2 and 80 characters.");
         const credential = await createUserWithEmailAndPassword(firebaseAuth, email.trim(), password);
         await updateProfile(credential.user, { displayName: name.trim() });
+        await sendEmailVerification(credential.user);
+        setVerificationEmail(credential.user.email || email.trim());
+        setNotice("Verification email sent. Verify your email before opening FIT.");
         await setDoc(doc(firestoreDb, "users", credential.user.uid), {
           uid: credential.user.uid,
           name: name.trim(),
@@ -80,7 +91,12 @@ export default function FirebaseAuthGate() {
           updatedAt: new Date().toISOString()
         });
       } else {
-        await signInWithEmailAndPassword(firebaseAuth, email.trim(), password);
+        const credential = await signInWithEmailAndPassword(firebaseAuth, email.trim(), password);
+        if (!credential.user.emailVerified) {
+          await sendEmailVerification(credential.user);
+          setVerificationEmail(credential.user.email || email.trim());
+          setNotice("Your email is not verified yet. We sent a new verification link.");
+        }
       }
     } catch (e) {
       const messages = {
@@ -105,6 +121,35 @@ export default function FirebaseAuthGate() {
     } catch (e) {
       setError(e.message || "Could not send password reset email.");
     }
+  }
+
+  async function refreshEmailVerification() {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const currentUser = firebaseAuth?.currentUser;
+      if (!currentUser) throw new Error("Please sign in again to verify your email.");
+      await reload(currentUser);
+      if (!firebaseAuth.currentUser?.emailVerified) {
+        setNotice("Email is not verified yet. Open the latest verification email, then try again.");
+        return;
+      }
+      setVerificationEmail("");
+      setChecking(true);
+      setUser(firebaseAuth.currentUser);
+    } catch (e) {
+      setError(e.message || "Could not refresh email verification status.");
+    } finally { setBusy(false); }
+  }
+
+  async function resendVerification() {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const currentUser = firebaseAuth?.currentUser;
+      if (!currentUser) throw new Error("Please sign in again to resend verification.");
+      await sendEmailVerification(currentUser);
+      setNotice("A new verification email was sent. Check your inbox and spam folder.");
+    } catch (e) { setError(e.message || "Could not send verification email."); }
+    finally { setBusy(false); }
   }
 
   async function deleteAccount() {
@@ -163,6 +208,8 @@ export default function FirebaseAuthGate() {
     const profile = { id: user.uid, uid: user.uid, name: user.displayName || "FIT Member", email: user.email };
     return <><div className="account-strip"><span>Signed in as <b>{profile.name}</b></span><button onClick={logout}>Sign out</button><button onClick={deleteAccount} disabled={busy}>Delete account</button></div><App user={profile} onSignOut={logout}/></>;
   }
+
+  if (verificationEmail && firebaseAuth?.currentUser && !firebaseAuth.currentUser.emailVerified) return <main className="auth-screen"><section className="auth-card"><div className="auth-brand"><span><Activity size={25}/></span> FIT<span className="auth-green">.</span></div><div className="auth-kicker">EMAIL VERIFICATION</div><h1>Verify your email.</h1><p>We sent a verification link to <b>{verificationEmail}</b>. Verify it before accessing your FIT account.</p>{error && <div className="auth-error">{error}</div>}{notice && <div className="auth-foot">{notice}</div>}<button className="auth-submit" disabled={busy} onClick={refreshEmailVerification}>{busy?"Checking…":"I've verified my email"}</button><button type="button" className="auth-switch" disabled={busy} onClick={resendVerification}>Resend verification email</button><button type="button" className="auth-switch" disabled={busy} onClick={logout}>Sign out</button></section></main>;
 
   return <main className="auth-screen">
     <section className="auth-card">
