@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // FIT currently accesses Firestore through the trusted Express backend.
+    // Firebase Admin SDK bypasses these rules; never expose service credentials
+    // in the browser or commit them to this repository.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
