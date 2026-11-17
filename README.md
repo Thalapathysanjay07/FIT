@@ -36,7 +36,7 @@ The endpoint requires a signed-in user, limits questions to 1,200 characters, ap
 
 ### Membership and payments
 
-FIT Pro pricing is ₹49 per month and ₹499 per year. The membership page generates a dynamic UPI QR code and also opens a UPI payment intent. Users submit the UTR; an owner manually verifies it in the Admin page before activation. The backend validates active subscription dates on every Premium AI request. Re-approving an existing active membership extends from its current expiry instead of discarding remaining days.
+FIT Pro has one plan only: ₹49 for 3 months (90 days). Monthly and yearly plans are removed. Renewal is manual. The membership page generates a dynamic UPI QR code and also opens a UPI payment intent. Users submit the UTR; an owner manually verifies it in the Admin page before activation. The backend validates active subscription dates on every Premium AI request. Re-approving an existing active membership extends from its current expiry instead of discarding remaining days.
 
 Configure FIT_UPI_ID, FIT_MERCHANT_NAME and a private FIT_ADMIN_KEY (at least 24 characters) on the backend. QR generation requires a valid merchant UPI ID. UTR submission is not automatic bank verification; the owner must verify the payment in the merchant's bank/UPI app before approval. Never share the admin key with customers.
 
@@ -79,7 +79,7 @@ The GitHub Actions workflow **FIT Android APK** builds a debug APK and uploads i
 - Daily nutrition and protein logging, date-specific meal and hydration tracking, editable targets and vegetarian / mixed / vegan sample meal planner
 - Hydration tracker, progress, challenges and discovery
 - FIT Coach free chat plus server-gated Pro diet, workout and weekly-report modes
-- Free and FIT Pro membership with ₹49 monthly / ₹499 yearly pricing
+- Free membership and one FIT Pro plan: ₹49 for 3 months (90-day validity)
 - Dynamic UPI QR and UPI intent checkout with manual owner verification and payment status history
 - Server-verified membership start/expiry checks and secure admin payment review
 - Account settings, fitness-data export and password-confirmed account deletion
