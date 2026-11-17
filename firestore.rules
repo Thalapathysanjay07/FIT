@@ -33,7 +33,7 @@ service cloud.firestore {
 
     // Payment requests may be submitted by their owner, but never approved by a client.
     match /paymentRequests/{requestId} {
-      allow read: if signedIn() && (resource.data.userId == request.auth.uid || resource.data.leaderboardOptIn == true);
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
           'userId', 'planCode', 'amountPaise', 'utr', 'status', 'createdAt'
@@ -56,7 +56,7 @@ service cloud.firestore {
     }
 
     match /activityDays/{documentId} {
-      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || resource.data.leaderboardOptIn == true);
       allow create: if signedIn()
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.steps is int
