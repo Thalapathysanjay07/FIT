@@ -27,3 +27,7 @@ services:
         value: FIT
       - key: FIT_ADMIN_KEY
         sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
