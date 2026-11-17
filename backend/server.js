@@ -215,6 +215,14 @@ app.post("/api/payments/upi-request", ready, auth, async (req,res) => {
     res.status(500).json({ error:"Could not submit payment reference." });
   }
 });
+app.get("/api/admin/payments", ready, async (req,res) => {
+  const supplied = String(req.headers["x-fit-admin-key"] || "");
+  if (!process.env.FIT_ADMIN_KEY || supplied.length < 24 || supplied !== process.env.FIT_ADMIN_KEY) return res.status(401).json({error:"Admin authorization required."});
+  try {
+    const result = await pool.query(`SELECT p.id,p.plan_code,p.amount_paise,p.utr,p.status,p.created_at,u.name,u.email FROM payment_requests p JOIN users u ON u.id=p.user_id ORDER BY CASE WHEN p.status='pending' THEN 0 ELSE 1 END,p.created_at DESC LIMIT 100`);
+    res.json({payments:result.rows});
+  } catch(error) { console.error("Admin payment list error:",error.message);res.status(500).json({error:"Could not load payment requests."}); }
+});
 app.post("/api/admin/payments/:id/review", ready, async (req,res) => {
   const supplied = String(req.headers["x-fit-admin-key"] || "");
   if (!process.env.FIT_ADMIN_KEY || supplied.length < 24 || supplied !== process.env.FIT_ADMIN_KEY) {
