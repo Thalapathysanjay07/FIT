@@ -12,8 +12,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
+      - run: npm install --no-audit --no-fund --legacy-peer-deps
       - run: npm run build
-      - run: npm install --prefix backend
+      - run: npm install --prefix backend --no-audit --no-fund --legacy-peer-deps
       - run: node --check backend/server.js
       - run: node --check backend/scripts/smoke-test.js
