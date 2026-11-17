@@ -12,6 +12,24 @@ import { timingSafeEqual } from "node:crypto";
 const { Pool } = pg;
 const app = express();
 const port = process.env.PORT || 5000;
+const allowedOrigins = (process.env.CLIENT_ORIGIN || "")
+  .split(",").map(value => value.trim()).filter(Boolean);
+if (allowedOrigins.includes("*")) {
+  throw new Error("CLIENT_ORIGIN must list explicit trusted origins; wildcard CORS is not allowed.");
+}
+if (process.env.NODE_ENV === "production") {
+  if (allowedOrigins.length === 0) throw new Error("CLIENT_ORIGIN must contain the deployed frontend origin in production.");
+  for (const origin of allowedOrigins) {
+    let parsed;
+    try { parsed = new URL(origin); } catch { throw new Error("CLIENT_ORIGIN contains an invalid origin."); }
+    if (parsed.origin !== origin || parsed.protocol !== "https:") {
+      throw new Error("Production CLIENT_ORIGIN values must be exact HTTPS origins without paths.");
+    }
+  }
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+    throw new Error("JWT_SECRET must contain at least 32 characters in production.");
+  }
+}
 const pool = process.env.DATABASE_URL ? new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined,
@@ -21,7 +39,17 @@ const pool = process.env.DATABASE_URL ? new Pool({
 }) : null;
 
 app.use(helmet());
-app.use(cors({ origin: (process.env.CLIENT_ORIGIN || "").split(",").filter(Boolean), credentials: false }));
+app.use(cors({
+  origin(origin, callback) {
+    // Native clients and server-to-server health checks may not send an Origin header.
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(null, false);
+  },
+  credentials: false,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-FIT-Admin-Key"]
+}));
 app.use(express.json({ limit: "256kb" }));
 app.use("/api/auth", rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false }));
 app.use("/api/coach", rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false }));
