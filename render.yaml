@@ -17,3 +17,13 @@ services:
         generateValue: true
       - key: CLIENT_ORIGIN
         sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: AI_MODEL
+        value: gpt-4o-mini
+      - key: FIT_UPI_ID
+        sync: false
+      - key: FIT_MERCHANT_NAME
+        value: FIT
+      - key: FIT_ADMIN_KEY
+        sync: false
