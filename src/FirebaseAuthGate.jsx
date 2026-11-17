@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Activity, ArrowRight, LockKeyhole, Mail, UserRound } from "lucide-react";
-import { createUserWithEmailAndPassword, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, EmailAuthProvider, reauthenticateWithCredential, deleteUser, sendEmailVerification, reload } from "firebase/auth";
+import { createUserWithEmailAndPassword, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, EmailAuthProvider, reauthenticateWithCredential, deleteUser, sendEmailVerification, reload, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, where, writeBatch } from "firebase/firestore";
 import App from "./App.jsx";
 import { firebaseAuth, firestoreDb, isFirebaseConfigured } from "./firebase.js";
@@ -112,6 +112,35 @@ export default function FirebaseAuthGate() {
     }
   }
 
+  async function signInWithGoogle() {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      if (!isFirebaseConfigured || !firebaseAuth || !firestoreDb) {
+        throw new Error("Firebase configuration is missing. Add the Firebase Web App settings first.");
+      }
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      const credential = await signInWithPopup(firebaseAuth, provider);
+      const googleUser = credential.user;
+      await setDoc(doc(firestoreDb, "users", googleUser.uid), {
+        uid: googleUser.uid,
+        name: googleUser.displayName || "FIT Member",
+        email: googleUser.email || "",
+        photoURL: googleUser.photoURL || "",
+        provider: "google",
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (e) {
+      const messages = {
+        "auth/popup-closed-by-user": "Google sign-in was cancelled.",
+        "auth/popup-blocked": "Allow pop-ups and try Google sign-in again.",
+        "auth/unauthorized-domain": "Add this app domain to Firebase Authentication authorized domains.",
+        "auth/account-exists-with-different-credential": "An account already exists with this email. Sign in using its original method."
+      };
+      setError(messages[e.code] || e.message || "Google sign-in failed.");
+    } finally { setBusy(false); }
+  }
+
   async function resetPassword() {
     setError(""); setNotice("");
     if (!email.trim()) { setError("Enter your email address first."); return; }
@@ -217,6 +246,11 @@ export default function FirebaseAuthGate() {
       <div className="auth-kicker">FIREBASE SECURE SIGN-IN</div>
       <h1>{mode === "register" ? "Create your account." : "Welcome back."}</h1>
       <p>Train with purpose. Track your progress. Build better habits.</p>
+      <button type="button" className="google-signin" onClick={signInWithGoogle} disabled={busy || !isFirebaseConfigured}>
+        <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.74 7.18l7.73 6C44.43 37.98 46.98 31.88 46.98 24.55z"/><path fill="#FBBC05" d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.87.93 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.91-5.8l-7.73-6c-2.14 1.44-4.89 2.3-8.18 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Continue with Google
+      </button>
+      <div className="auth-divider"><span>OR CONTINUE WITH EMAIL</span></div>
       <form onSubmit={submit}>
         {mode === "register" && <label><UserRound size={16}/><input value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" minLength="2" maxLength="80" required/></label>}
         <label><Mail size={16}/><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email address" autoComplete="email" required/></label>
