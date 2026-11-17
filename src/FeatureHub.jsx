@@ -1,3 +1,5 @@
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { firebaseAuth, firestoreDb } from "./firebase.js";
 import {useEffect,useMemo,useRef,useState} from "react";
 import ActivityRewards from "./ActivityRewards.jsx";
 import {Activity,ArrowDownToLine,CalendarDays,CheckCircle2,Clock3,Dumbbell,Download,Flame,Footprints,HeartPulse,Search,Settings,ShieldCheck,Target,Timer,Trash2,UserRound,Wind,Zap} from "lucide-react";
@@ -133,13 +135,22 @@ function WalkingTracker({onToast}){
  }
  async function syncStepsToAccount(){
    try{
-     const response=await fetch(`${import.meta.env.VITE_API_URL||""}/api/activity/today`,{
-       method:"PUT",
-       headers:{"Content-Type":"application/json",Authorization:`Bearer ${localStorage.getItem("fit-token")}`},
-       body:JSON.stringify({date,steps,stepGoal:target})
-     });
-     const data=await response.json().catch(()=>({}));
-     if(!response.ok)throw new Error(data.error||"Could not sync walking activity.");
+     if(import.meta.env.VITE_USE_FIREBASE_AUTH==="true"){
+       const user=firebaseAuth?.currentUser;
+       if(!user||!firestoreDb)throw new Error("Please sign in to Firebase again.");
+       const ref=doc(firestoreDb,"activityDays",user.uid+"_"+date);
+       const snap=await getDoc(ref);
+       const old=snap.exists()?snap.data():{};
+       await setDoc(ref,{userId:user.uid,activityDate:date,steps:Math.round(steps),stepGoal:Math.round(target),workouts:Number(old.workouts||0),leaderboardOptIn:Boolean(old.leaderboardOptIn),updatedAt:new Date().toISOString()},{merge:true});
+     }else{
+       const response=await fetch(`${import.meta.env.VITE_API_URL||""}/api/activity/today`,{
+         method:"PUT",
+         headers:{"Content-Type":"application/json",Authorization:`Bearer ${localStorage.getItem("fit-token")}`},
+         body:JSON.stringify({date,steps,stepGoal:target})
+       });
+       const data=await response.json().catch(()=>({}));
+       if(!response.ok)throw new Error(data.error||"Could not sync walking activity.");
+     }
      onToast?.("Walking activity synced to your FIT account");
    }catch(error){setStatus(error.message||"Sign in to sync activity to your FIT account.");}
  }
@@ -178,7 +189,7 @@ export default function FeatureHub({page,onToast,onSignOut,user,goal,level,onGoa
  useEffect(()=>{if(!timerOn||rest<=0)return;const id=setInterval(()=>setRest(v=>{if(v<=1){setTimerOn(false);return 0}return v-1}),1000);return()=>clearInterval(id)},[timerOn,rest]);
  const bmi=Number(profile.age)>=18&&Number(profile.weightKg)>0&&Number(profile.heightCm)>0?Number(profile.weightKg)/((Number(profile.heightCm)/100)**2):null;
  const weekly=useMemo(()=>{const count=Math.min(6,Math.max(2,Number(profile.daysPerWeek)||3));const chosen=profile.goal==="Weight loss"?[sessions[0],sessions[3],sessions[1],sessions[2]]:profile.goal==="Muscle gain"?[sessions[0],sessions[2],sessions[1],sessions[0]]:[sessions[0],sessions[3],sessions[2],sessions[1]];return days.map((day,i)=>({day,session:i<count?chosen[i%chosen.length]:null}))},[profile.goal,profile.daysPerWeek]);
- const toggleSession=async(day)=>{const key=todayKey()+"-"+day;const wasDone=!!completed[key];setCompleted(v=>({...v,[key]:!v[key]}));onToast?.(wasDone?"Workout marked incomplete":"Workout completed");if(!wasDone){try{const response=await fetch(`${import.meta.env.VITE_API_URL||""}/api/activity/workout`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${localStorage.getItem("fit-token")}`},body:JSON.stringify({date:todayKey()})});if(!response.ok){const data=await response.json().catch(()=>({}));throw new Error(data.error||"Workout saved on this device; server sync is unavailable.");}}catch(error){onToast?.(error.message||"Workout saved locally; sync unavailable.");}}};
+ const toggleSession=async(day)=>{const key=todayKey()+"-"+day;const wasDone=!!completed[key];setCompleted(v=>({...v,[key]:!v[key]}));onToast?.(wasDone?"Workout marked incomplete":"Workout completed");if(!wasDone){try{if(import.meta.env.VITE_USE_FIREBASE_AUTH==="true"){const user=firebaseAuth?.currentUser;if(!user||!firestoreDb)throw new Error("Please sign in to Firebase again.");const date=todayKey();const ref=doc(firestoreDb,"activityDays",user.uid+"_"+date);const snap=await getDoc(ref);const old=snap.exists()?snap.data():{};await setDoc(ref,{userId:user.uid,activityDate:date,steps:Number(old.steps||0),stepGoal:Number(old.stepGoal||8000),workouts:Math.min(20,Number(old.workouts||0)+1),leaderboardOptIn:Boolean(old.leaderboardOptIn),updatedAt:new Date().toISOString()},{merge:true});}else{const response=await fetch(`${import.meta.env.VITE_API_URL||""}/api/activity/workout`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${localStorage.getItem("fit-token")}`},body:JSON.stringify({date:todayKey()})});if(!response.ok){const data=await response.json().catch(()=>({}));throw new Error(data.error||"Workout saved on this device; server sync is unavailable.");}}}catch(error){onToast?.(error.message||"Workout saved locally; sync unavailable.");}}};
  const exportData=()=>{const data={exportedAt:new Date().toISOString(),profile,sessionLog:completed,fitnessData:Object.fromEntries(Object.keys(localStorage).filter(k=>k.startsWith("fit-")&&k!=="fit-token").map(k=>[k,read(k,null)]))};const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="fit-my-data.json";a.click();URL.revokeObjectURL(url);onToast?.("Your data export is ready")};
  const deleteAccount=async()=>{const password=window.prompt("Enter your account password to permanently delete your FIT account and synced data.");if(password===null)return;if(!password)return onToast?.("Password is required");try{const response=await fetch(`${import.meta.env.VITE_API_URL||""}/api/account`,{method:"DELETE",headers:{"Content-Type":"application/json",Authorization:`Bearer ${localStorage.getItem("fit-token")}`},body:JSON.stringify({password})});const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||"Account deletion failed");localStorage.clear();window.location.reload()}catch(error){onToast?.(error.message)}};
 
