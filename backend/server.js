@@ -8,7 +8,7 @@ import jwt from "jsonwebtoken";
 import pg from "pg";
 import QRCode from "qrcode";
 import { timingSafeEqual } from "node:crypto";
-import { getFirebaseStatus, getFirestoreDb, verifyFirestoreConnection } from "./firebase.js";
+import { getFirebaseStatus, getFirestoreDb, verifyFirebaseIdToken, verifyFirestoreConnection } from "./firebase.js";
 
 const { Pool } = pg;
 const app = express();
@@ -124,6 +124,18 @@ function adminAuthorized(req) {
   const supplied=Buffer.from(String(req.headers["x-fit-admin-key"]||""));
   return configured.length>=24 && configured.length===supplied.length && timingSafeEqual(configured,supplied);
 }
+async function firebaseAuthRequired(req,res,next) {
+  const value = req.headers.authorization || "";
+  if (!value.startsWith("Bearer ")) return res.status(401).json({ error: "Please sign in with Firebase." });
+  try {
+    const decoded = await verifyFirebaseIdToken(value.slice(7));
+    req.firebaseUser = { uid: decoded.uid, email: decoded.email || "", name: decoded.name || "" };
+    next();
+  } catch {
+    return res.status(401).json({ error: "Firebase session expired. Please sign in again." });
+  }
+}
+
 function auth(req,res,next) {
   const value = req.headers.authorization || "";
   if (!value.startsWith("Bearer ")) return res.status(401).json({ error: "Please sign in." });
@@ -143,6 +155,58 @@ app.get("/api/firebase/health", async (_req,res) => {
   } catch (error) {
     console.error("Firestore health check failed:", error.message);
     res.status(503).json({ status: "unavailable" });
+  }
+});
+
+// Firebase-native endpoints. These do not depend on PostgreSQL.
+app.get("/api/firebase/me", firebaseAuthRequired, async (req,res) => {
+  try {
+    const db = getFirestoreDb();
+    const ref = db.collection("users").doc(req.firebaseUser.uid);
+    const snap = await ref.get();
+    const profile = {
+      uid: req.firebaseUser.uid,
+      email: req.firebaseUser.email,
+      name: req.firebaseUser.name || (snap.exists ? snap.data().name : "") || "FIT Member"
+    };
+    if (!snap.exists) {
+      await ref.set({ ...profile, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    }
+    res.set("Cache-Control", "no-store");
+    res.json({ user: profile, source: "firebase-auth+firestore" });
+  } catch (error) {
+    console.error("Firebase profile load failed:", error.message);
+    res.status(503).json({ error: "Could not load your Firebase profile." });
+  }
+});
+
+app.get("/api/firebase/data", firebaseAuthRequired, async (req,res) => {
+  try {
+    const snapshot = await getFirestoreDb().collection("userData").doc(req.firebaseUser.uid).get();
+    res.set("Cache-Control", "no-store");
+    res.json({ data: snapshot.exists ? (snapshot.data().data || {}) : {}, source: "firestore" });
+  } catch (error) {
+    console.error("Firebase data read failed:", error.message);
+    res.status(503).json({ error: "Could not load your Firebase fitness data." });
+  }
+});
+
+app.put("/api/firebase/data", firebaseAuthRequired, async (req,res) => {
+  const data = req.body?.data;
+  if (!data || typeof data !== "object" || Array.isArray(data) || JSON.stringify(data).length > 200000) {
+    return res.status(400).json({ error: "Invalid fitness data." });
+  }
+  const allowed = Object.fromEntries(Object.entries(data).filter(([key]) => /^fit-[a-z0-9-]{1,60}$/.test(key)));
+  try {
+    await getFirestoreDb().collection("userData").doc(req.firebaseUser.uid).set({
+      uid: req.firebaseUser.uid,
+      data: allowed,
+      updatedAt: new Date().toISOString()
+    }, { merge: false });
+    res.json({ saved: true, source: "firestore" });
+  } catch (error) {
+    console.error("Firebase data save failed:", error.message);
+    res.status(503).json({ error: "Fitness data could not be saved. Please retry." });
   }
 });
 
