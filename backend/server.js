@@ -8,6 +8,7 @@ import jwt from "jsonwebtoken";
 import pg from "pg";
 import QRCode from "qrcode";
 import { timingSafeEqual } from "node:crypto";
+import { getFirebaseStatus, verifyFirestoreConnection } from "./firebase.js";
 
 const { Pool } = pg;
 const app = express();
@@ -131,6 +132,19 @@ function auth(req,res,next) {
     next();
   } catch { return res.status(401).json({ error: "Session expired. Please sign in again." }); }
 }
+
+app.get("/api/firebase/health", async (_req,res) => {
+  const status = getFirebaseStatus();
+  if (!status.configured) return res.status(503).json({ status: "not_configured" });
+  try {
+    await verifyFirestoreConnection();
+    res.set("Cache-Control","no-store");
+    res.json({ status: "connected", projectId: status.projectId });
+  } catch (error) {
+    console.error("Firestore health check failed:", error.message);
+    res.status(503).json({ status: "unavailable" });
+  }
+});
 
 app.get("/api/health", async (_req,res) => {
   if (!pool) return res.status(503).json({ status: "needs_database" });
