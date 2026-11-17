@@ -12,11 +12,11 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if owns(uid);
       allow create: if owns(uid)
-        && request.resource.data.keys().hasOnly(['uid', 'name', 'email', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'email', 'photoURL', 'provider', 'createdAt', 'updatedAt'])
         && request.resource.data.uid == uid;
       allow update: if owns(uid)
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['name', 'updatedAt']);
+          .hasOnly(['name', 'photoURL', 'provider', 'updatedAt']);
       allow delete: if owns(uid);
     }
 
