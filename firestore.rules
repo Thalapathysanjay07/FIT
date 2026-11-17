@@ -58,20 +58,52 @@ service cloud.firestore {
     }
 
     match /activityDays/{documentId} {
-      allow read: if signedIn() && (resource.data.userId == request.auth.uid || resource.data.leaderboardOptIn == true);
+      // Only explicitly opted-in rows are visible to leaderboard readers.
+      allow read: if signedIn()
+        && (resource.data.userId == request.auth.uid || resource.data.leaderboardOptIn == true);
       allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'userId', 'activityDate', 'steps', 'stepGoal', 'workouts',
+          'leaderboardOptIn', 'displayName', 'updatedAt'
+        ])
         && request.resource.data.userId == request.auth.uid
+        && request.resource.data.activityDate is string
+        && request.resource.data.activityDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && request.resource.data.steps is int
         && request.resource.data.steps >= 0
-        && request.resource.data.steps <= 200000;
+        && request.resource.data.steps <= 200000
+        && request.resource.data.stepGoal is int
+        && request.resource.data.stepGoal >= 1000
+        && request.resource.data.stepGoal <= 50000
+        && request.resource.data.workouts is int
+        && request.resource.data.workouts >= 0
+        && request.resource.data.workouts <= 20
+        && request.resource.data.leaderboardOptIn is bool
+        && request.resource.data.updatedAt is string
+        && (!('displayName' in request.resource.data)
+          || (request.resource.data.displayName is string
+            && request.resource.data.displayName.size() <= 80));
       allow update: if signedIn()
         && resource.data.userId == request.auth.uid
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['steps', 'stepGoal', 'workouts', 'leaderboardOptIn', 'displayName', 'updatedAt']);
+          .hasOnly(['steps', 'stepGoal', 'workouts', 'leaderboardOptIn', 'displayName', 'updatedAt'])
+        && request.resource.data.steps is int
+        && request.resource.data.steps >= 0
+        && request.resource.data.steps <= 200000
+        && request.resource.data.stepGoal is int
+        && request.resource.data.stepGoal >= 1000
+        && request.resource.data.stepGoal <= 50000
+        && request.resource.data.workouts is int
+        && request.resource.data.workouts >= 0
+        && request.resource.data.workouts <= 20
+        && request.resource.data.leaderboardOptIn is bool
+        && request.resource.data.updatedAt is string
+        && (!('displayName' in request.resource.data)
+          || (request.resource.data.displayName is string
+            && request.resource.data.displayName.size() <= 80));
       allow delete: if signedIn() && resource.data.userId == request.auth.uid;
     }
-
     match /activityNotifications/{notificationId} {
       allow read: if signedIn() && resource.data.userId == request.auth.uid;
       allow update: if signedIn()
