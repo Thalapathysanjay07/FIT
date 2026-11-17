@@ -78,8 +78,10 @@ The GitHub Actions workflow **FIT Android APK** builds a debug APK and uploads i
 - Fitness profile with age, height, weight, target weight, equipment and experience settings
 - Daily nutrition and protein logging, date-specific meal and hydration tracking, editable targets and vegetarian / mixed / vegan sample meal planner
 - Hydration tracker, progress, challenges and discovery
-- FIT Coach starter guidance
-- Free and proposed Pro membership screens
+- FIT Coach free chat plus server-gated Pro diet, workout and weekly-report modes
+- Free and FIT Pro membership with ₹49 monthly / ₹499 yearly pricing
+- Dynamic UPI QR and UPI intent checkout with manual owner verification and payment status history
+- Server-verified membership start/expiry checks and secure admin payment review
 - Account settings, fitness-data export and password-confirmed account deletion
 - Privacy policy and terms starter pages
 - Responsive layouts and installable PWA
