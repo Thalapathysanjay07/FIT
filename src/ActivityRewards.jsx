@@ -56,7 +56,7 @@ export default function ActivityRewards({onToast}){
    if(import.meta.env.VITE_USE_FIREBASE_AUTH==="true"){
     const user=firebaseAuth?.currentUser;if(!user||!firestoreDb)throw new Error("Please sign in to Firebase again.");
     const ref=doc(firestoreDb,"activityDays",user.uid+"_"+today);const snap=await getDoc(ref);const old=snap.exists()?snap.data():{};
-    await setDoc(ref,{userId:user.uid,activityDate:today,steps:Math.round(steps),stepGoal:Math.round(goal),workouts:Number(old.workouts||0),leaderboardOptIn:Boolean(old.leaderboardOptIn),displayName:user.displayName||"FIT Member",updatedAt:new Date().toISOString()},{merge:true});
+    await setDoc(ref,{userId:user.uid,activityDate:today,steps:Math.round(steps),stepGoal:Math.round(goal),workouts:Number(old.workouts||0),leaderboardOptIn:Boolean(old.leaderboardOptIn),displayName:user.displayName||"FIT Member",updatedAt:new Date().toISOString()},{merge:true});if(steps>=goal){await setDoc(doc(firestoreDb,"activityNotifications",user.uid+"_stepgoal_"+today),{userId:user.uid,kind:"step_goal",title:"Daily step goal reached",body:"You reached your step goal. Great consistency!",createdAt:new Date().toISOString(),readAt:null});}
    }else{
     const d=await request("/api/activity/today",{method:"PUT",body:JSON.stringify({date:today,steps,stepGoal:goal})});setSteps(Number(d.activity.steps));
    }
