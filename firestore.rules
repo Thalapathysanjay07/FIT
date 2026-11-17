@@ -33,7 +33,7 @@ service cloud.firestore {
 
     // Payment requests may be submitted by their owner, but never approved by a client.
     match /paymentRequests/{requestId} {
-      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || resource.data.leaderboardOptIn == true);
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
           'userId', 'planCode', 'amountPaise', 'utr', 'status', 'createdAt'
@@ -66,7 +66,7 @@ service cloud.firestore {
         && resource.data.userId == request.auth.uid
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['steps', 'stepGoal', 'workouts', 'leaderboardOptIn', 'updatedAt']);
+          .hasOnly(['steps', 'stepGoal', 'workouts', 'leaderboardOptIn', 'displayName', 'updatedAt']);
       allow delete: if signedIn() && resource.data.userId == request.auth.uid;
     }
 
