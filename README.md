@@ -36,7 +36,7 @@ The endpoint requires a signed-in user, limits questions to 1,200 characters, ap
 
 ### Membership and payments
 
-Membership is currently informational only. Checkout and premium activation are intentionally disabled while the core app is being completed. QR / UPI payment will be implemented later, after the fitness features and deployment are tested. No payment should be collected through the current app.
+FIT Pro pricing is ₹49 per month and ₹499 per year. UPI payment requests are submitted with a transaction reference and require manual admin verification before membership activation. Configure FIT_UPI_ID, FIT_MERCHANT_NAME and FIT_ADMIN_KEY on the backend. QR image display is not yet implemented; do not claim automatic payment verification.
 
 ## Deployment
 
