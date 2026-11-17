@@ -40,8 +40,11 @@ const maxWeeklySteps=Math.max(1,...weeklyNutrition.map(d=>d.steps));
 useEffect(()=>localStorage.setItem("fit-meals-"+dayKey(),JSON.stringify(meals)),[meals]);useEffect(()=>localStorage.setItem("fit-done",JSON.stringify(done)),[done]);useEffect(()=>localStorage.setItem("fit-goal",JSON.stringify(goal)),[goal]);useEffect(()=>localStorage.setItem("fit-level",JSON.stringify(level)),[level]);useEffect(()=>localStorage.setItem("fit-cal",JSON.stringify(calTarget)),[calTarget]);useEffect(()=>localStorage.setItem("fit-pro",JSON.stringify(proTarget)),[proTarget]);useEffect(()=>localStorage.setItem("fit-water-"+dayKey(),JSON.stringify(water)),[water]);useEffect(()=>localStorage.setItem("fit-weights",JSON.stringify(weights)),[weights]);useEffect(()=>localStorage.setItem("fit-ch",JSON.stringify(ch)),[ch]);
 useEffect(()=>{
   const sync=async()=>{
-    const token=localStorage.getItem("fit-token");
-    if(!token)return;
+    const firebaseMode=import.meta.env.VITE_USE_FIREBASE_AUTH==="true";
+    const currentUser=firebaseMode?firebaseAuth?.currentUser:null;
+    const legacyToken=localStorage.getItem("fit-token");
+    if(firebaseMode&&!currentUser)return;
+    if(!firebaseMode&&!legacyToken)return;
     const data={};
     for(let i=0;i<localStorage.length;i++){
       const key=localStorage.key(i);
@@ -49,7 +52,15 @@ useEffect(()=>{
         try{data[key]=JSON.parse(localStorage.getItem(key));}catch{}
       }
     }
-    try{await fetch(`${import.meta.env.VITE_API_URL||""}/api/data`,{method:"PUT",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({data})});}catch{}
+    try{
+      const token=firebaseMode?await currentUser.getIdToken():legacyToken;
+      const endpoint=firebaseMode?"/api/firebase/data":"/api/data";
+      await fetch(`${import.meta.env.VITE_API_URL||""}${endpoint}`,{
+        method:"PUT",
+        headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},
+        body:JSON.stringify({data})
+      });
+    }catch(error){console.warn("FIT data sync failed:",error);}
   };
   const timer=setInterval(sync,5000);
   sync();
