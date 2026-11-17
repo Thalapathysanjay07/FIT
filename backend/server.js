@@ -211,8 +211,7 @@ app.post("/api/coach", ready, auth, async (req,res) => {
 });
 // Manual UPI/QR membership payments. No payment gateway or automatic payment claim.
 const membershipPlans = {
-  monthly: { name: "FIT Pro Monthly", amountPaise: 4900, days: 30 },
-  yearly: { name: "FIT Pro Yearly", amountPaise: 49900, days: 365 }
+  quarterly: { name: "FIT Pro 3 Months", amountPaise: 4900, days: 90 }
 };
 app.get("/api/membership/qr", ready, async (req,res) => {
   const planCode=String(req.query.plan||"monthly");
