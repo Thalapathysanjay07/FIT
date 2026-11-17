@@ -8,7 +8,7 @@ import jwt from "jsonwebtoken";
 import pg from "pg";
 import QRCode from "qrcode";
 import { timingSafeEqual } from "node:crypto";
-import { getFirebaseStatus, verifyFirestoreConnection } from "./firebase.js";
+import { getFirebaseStatus, getFirestoreDb, verifyFirestoreConnection } from "./firebase.js";
 
 const { Pool } = pg;
 const app = express();
@@ -454,16 +454,43 @@ app.post("/api/activity/notifications/:id/read", ready, auth, async (req,res) =>
 });
 
 app.get("/api/data", ready, auth, async (req,res) => {
-  const r = await pool.query("SELECT data FROM user_data WHERE user_id=$1", [req.user.sub]);
-  res.json({ data:r.rows[0]?.data || {} });
+  // Firestore is the preferred read source when configured; PostgreSQL remains the
+  // authentication system and fallback during the staged migration.
+  try {
+    if (getFirebaseStatus().configured) {
+      const snapshot = await getFirestoreDb().collection("userData").doc(String(req.user.sub)).get();
+      if (snapshot.exists && snapshot.data()?.data) {
+        res.set("Cache-Control","no-store");
+        return res.json({ data:snapshot.data().data, source:"firestore" });
+      }
+    }
+    const r = await pool.query("SELECT data FROM user_data WHERE user_id=$1", [req.user.sub]);
+    res.json({ data:r.rows[0]?.data || {}, source:"postgresql" });
+  } catch (error) {
+    console.error("User data read failed:",error.message);
+    res.status(503).json({error:"Could not load synced fitness data."});
+  }
 });
 app.put("/api/data", ready, auth, async (req,res) => {
   const data = req.body?.data;
   if (!data || typeof data !== "object" || Array.isArray(data) || JSON.stringify(data).length > 200000) return res.status(400).json({ error: "Invalid fitness data." });
   const allowed = Object.fromEntries(Object.entries(data).filter(([key]) => /^fit-[a-z0-9-]{1,60}$/.test(key)));
-  await pool.query(`INSERT INTO user_data(user_id,data,updated_at) VALUES($1,$2::jsonb,NOW())
-    ON CONFLICT(user_id) DO UPDATE SET data=EXCLUDED.data,updated_at=NOW()`, [req.user.sub,JSON.stringify(allowed)]);
-  res.json({ saved:true });
+  try {
+    // Keep PostgreSQL as the recovery copy until all FIT APIs are migrated.
+    await pool.query(`INSERT INTO user_data(user_id,data,updated_at) VALUES($1,$2::jsonb,NOW())
+      ON CONFLICT(user_id) DO UPDATE SET data=EXCLUDED.data,updated_at=NOW()`, [req.user.sub,JSON.stringify(allowed)]);
+    let firestoreSynced = false;
+    if (getFirebaseStatus().configured) {
+      await getFirestoreDb().collection("userData").doc(String(req.user.sub)).set({
+        userId:String(req.user.sub), data:allowed, updatedAt:new Date().toISOString()
+      }, {merge:false});
+      firestoreSynced = true;
+    }
+    res.json({ saved:true, firestoreSynced, source:firestoreSynced?"firestore+postgresql":"postgresql" });
+  } catch (error) {
+    console.error("User data sync failed:",error.message);
+    res.status(503).json({error:"Fitness data could not be safely synced. Please retry."});
+  }
 });
 app.use((_req,res)=>res.status(404).json({error:"Not found"}));
 init().then(()=>app.listen(port,()=>console.log(`FIT API listening on ${port}`))).catch(error=>{console.error("Database initialization failed:",error.message);process.exit(1);});
