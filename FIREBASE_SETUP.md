@@ -47,7 +47,7 @@ Never put service-account JSON, private keys, or Firebase Admin credentials in `
 
 The Express/PostgreSQL backend remains active during the migration. Existing accounts, payment requests, membership records, and some activity routes still depend on PostgreSQL. Do not remove `DATABASE_URL`, Render, or the old database until every route has been migrated and verified.
 
-The repository currently has a Firebase Admin SDK integration for backend-only operations. That integration is separate from the Spark client SDK. A service-account private key is privileged and must never be placed in the browser.
+The Firebase-mode frontend uses the Firebase Web SDK directly. The legacy Express backend and its Firebase Admin SDK integration remain in the repository only for backward compatibility; Firebase-mode sign-in, app data, activity, and payment submission do not require that backend. A service-account private key is privileged and must never be placed in the browser.
 
 ## Deploy Firestore rules
 
@@ -58,26 +58,11 @@ firebase deploy --only firestore:rules
 
 Do not deploy permissive test rules. Rules must scope every user-owned document to the authenticated UID and must prevent clients from modifying membership entitlements or admin records.
 
-## Firebase-authenticated API endpoints (staged)
+## Firebase-mode application
 
-The backend now exposes these Firebase ID-token-protected endpoints:
+The entry point selects `src/FirebaseAuthGate.jsx` when `VITE_USE_FIREBASE_AUTH=true`. Firebase mode uses Firebase Authentication and Firestore directly for sign-in, profile/data sync, activity, leaderboard, notifications, membership reads, payment-request submission, and account deletion. The legacy Express/PostgreSQL path remains available only when the flag is false.
 
-- `GET /api/firebase/me` — verifies the Firebase ID token and creates/reads a minimal `users/{uid}` profile.
-- `GET /api/firebase/data` — reads the signed-in user's `userData/{uid}` document.
-- `PUT /api/firebase/data` — writes only that user's bounded `fit-*` app data.
-- `GET /api/firebase/health` — checks Admin SDK / Firestore connectivity.
-
-Send the Firebase ID token as `Authorization: Bearer <ID_TOKEN>`. The server verifies token revocation and derives the UID from the verified token; never accept a UID supplied in the request body as the account identity.
-
-**Important:** The current sign-in screen and several app features still use the legacy PostgreSQL/JWT endpoints. These new endpoints are an additive migration layer and do not mean the frontend has switched to Firebase yet. Do not remove the legacy database until AuthGate, membership, payments, activity, coach, and account deletion have all been migrated and tested.
-
-## Firebase Authentication frontend status
-
-A separate `src/FirebaseAuthGate.jsx` now implements Firebase email/password registration, sign-in, password-reset email, persistent auth-state handling, profile creation, and initial Firestore fitness-data hydration. The app entry point can select it using `VITE_USE_FIREBASE_AUTH=true`.
-
-**Keep `VITE_USE_FIREBASE_AUTH=false` for now.** The membership, UPI payment review, FIT Coach, activity/leaderboard, and account deletion flows still call legacy PostgreSQL/JWT endpoints. Enabling Firebase sign-in before those routes are migrated will cause those parts of the app to fail. The Firebase auth gate and Firebase data sync are staged but not yet the production default.
-
-When enabled after the remaining API migration, set `VITE_USE_FIREBASE_AUTH=true` in the frontend host environment and redeploy. The Firebase Web app settings must also be configured, and Email/Password must be enabled under Firebase Console → Authentication → Sign-in method.
+Do not switch the production host to Firebase mode until you have created the Firebase project, enabled Email/Password, created Firestore, deployed the rules, and set all required frontend environment variables. After that configuration is saved, redeploy the frontend and test registration, login, data sync, payment submission, and deletion with a test account.
 
 ## Current Firebase-first frontend implementation
 
