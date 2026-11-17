@@ -33,6 +33,7 @@ function AdminPanel(){
 }
 
 export default function App({onSignOut,user}){
+const lastSavedData=useRef("");
 const [page,S]=useState("Overview"),[mobile,M]=useState(false),[meals,SM]=useState(initialMeals),[done,SD]=useState(()=>read("fit-done",[])),[goal,SG]=useState(()=>read("fit-goal","Muscle gain")),[level,SL]=useState(()=>read("fit-level","Beginner")),[calTarget,SC]=useState(()=>read("fit-cal",2000)),[proTarget,SP]=useState(()=>read("fit-pro",120)),[water,SW]=useState(initialWater),[weights,SWt]=useState(()=>read("fit-weights",[])),[weightInput,SWeightInput]=useState(""),[ch,SH]=useState(()=>read("fit-ch",{})),[modal,SMo]=useState(false),[name,SN]=useState(""),[cal,SCal]=useState(""),[pro,SPro]=useState(""),[search,SS]=useState(""),[prompt,SPr]=useState(""),[reply,SR]=useState(""),[coachLoading,SCoachLoading]=useState(false),[coachMode,SCoachMode]=useState("chat"),[paymentConfig,SPaymentConfig]=useState(null),[qrData,SQrData]=useState(""),[membership,SMembership]=useState(null),[payments,SPayments]=useState([]),[selectedPlan,SSelectedPlan]=useState("quarterly"),[utr,SUTR]=useState(""),[paymentBusy,SPaymentBusy]=useState(false),[paymentError,SPaymentError]=useState(""),[paymentMessage,SPaymentMessage]=useState(""),[toast,ST]=useState("");
 const cals=meals.reduce((s,m)=>s+Number(m.cal||0),0),protein=meals.reduce((s,m)=>s+Number(m.protein||0),0);
 const profile=read("fit-profile",{});
