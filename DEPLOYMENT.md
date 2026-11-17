@@ -13,7 +13,7 @@ Configure these variables in the backend hosting dashboard. Never commit real va
 - `DATABASE_URL`: PostgreSQL connection string.
 - `DATABASE_SSL=true`: enable TLS where required by the database provider.
 - `JWT_SECRET`: random secret with at least 32 characters.
-- `CLIENT_ORIGIN`: exact frontend origin; multiple origins may be comma-separated.
+- `CLIENT_ORIGIN`: exact HTTPS frontend origin in production; multiple origins may be comma-separated. Wildcard origins are rejected.
 - `OPENAI_API_KEY`: optional until AI Coach is enabled.
 - `AI_MODEL`: defaults to `gpt-4o-mini`.
 - `FIT_UPI_ID`: merchant UPI ID for QR/payment configuration.
@@ -23,7 +23,7 @@ Configure these variables in the backend hosting dashboard. Never commit real va
 See `backend/.env.example` for a local template. Never put backend secrets in frontend variables or Vite code.
 
 ## Release verification
-1. Confirm backend `/api/health` returns `{"status":"ok"}`.
+1. Confirm backend `/api/health` returns `{"status":"ok"}`. Production startup now rejects missing/weak JWT secrets and invalid or wildcard frontend origins.
 2. Confirm the frontend build uses the correct `VITE_API_URL`.
 3. Register a disposable test account and verify login and `/api/auth/me`.
 4. Verify a free account receives `tier: "free"` from `/api/membership/access`.
