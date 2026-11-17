@@ -20,3 +20,6 @@ From the repository root, after installing Firebase CLI and signing in:
 ```bash
 firebase deploy --only firestore:rules
 ```
+
+## Backend Firebase Admin connection
+The backend now supports Firebase Admin SDK initialization from the server-only `FIREBASE_SERVICE_ACCOUNT` environment variable (the complete service-account JSON string) and optional `FIREBASE_PROJECT_ID`. Add both as private environment variables in Render. Do not commit the JSON key or expose it to Vite. After deploying, test `GET /api/firebase/health`; expected response is `{"status":"connected","projectId":"your-project-id"}`. If not configured, this endpoint returns `503 not_configured`. Existing PostgreSQL routes remain active; Firestore has not replaced PostgreSQL yet.
