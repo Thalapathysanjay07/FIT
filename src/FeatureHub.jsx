@@ -210,7 +210,32 @@ export default function FeatureHub({page,onToast,onSignOut,user,goal,level,onGoa
    }
   }catch(error){onToast?.(error.message||"Workout saved locally; sync unavailable.");}
  };
- const exportData=()=>{const data={exportedAt:new Date().toISOString(),profile,sessionLog:completed,fitnessData:Object.fromEntries(Object.keys(localStorage).filter(k=>k.startsWith("fit-")&&k!=="fit-token").map(k=>[k,read(k,null)]))};const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="fit-my-data.json";a.click();URL.revokeObjectURL(url);onToast?.("Your data export is ready")};
+ const exportData=async()=>{try{
+  const localData=Object.fromEntries(Object.keys(localStorage).filter(k=>k.startsWith("fit-")&&k!=="fit-token").map(k=>[k,read(k,null)]));
+  const data={exportedAt:new Date().toISOString(),profile,sessionLog:completed,fitnessData:localData,cloudData:null};
+  if(import.meta.env.VITE_USE_FIREBASE_AUTH==="true"){
+    const user=firebaseAuth?.currentUser;
+    if(!user||!firestoreDb)throw new Error("Sign in to export your Firebase data.");
+    const [profileSnap,dataSnap,membershipSnap,activitySnap,notificationSnap,paymentSnap]=await Promise.all([
+      getDoc(doc(firestoreDb,"users",user.uid)),
+      getDoc(doc(firestoreDb,"userData",user.uid)),
+      getDoc(doc(firestoreDb,"memberships",user.uid)),
+      getDocs(query(collection(firestoreDb,"activityDays"),where("userId","==",user.uid))),
+      getDocs(query(collection(firestoreDb,"activityNotifications"),where("userId","==",user.uid))),
+      getDocs(query(collection(firestoreDb,"paymentRequests"),where("userId","==",user.uid)))
+    ]);
+    data.cloudData={
+      profile:profileSnap.exists()?profileSnap.data():null,
+      userData:dataSnap.exists()?dataSnap.data():null,
+      membership:membershipSnap.exists()?membershipSnap.data():null,
+      activityDays:activitySnap.docs.map(item=>item.data()),
+      notifications:notificationSnap.docs.map(item=>item.data()),
+      paymentRequests:paymentSnap.docs.map(item=>item.data())
+    };
+  }
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="fit-my-data.json";a.click();URL.revokeObjectURL(url);onToast?.("Your FIT data export is ready");
+ }catch(error){onToast?.(error.message||"Could not export FIT data.");}};
  const deleteAccount=async()=>{const password=window.prompt("Enter your account password to permanently delete your FIT account and synced data.");if(password===null)return;if(!password)return onToast?.("Password is required");try{if(import.meta.env.VITE_USE_FIREBASE_AUTH==="true"){const user=firebaseAuth?.currentUser;if(!user||!firestoreDb||!user.email)throw new Error("Please sign in with an email/password account before deleting.");await reauthenticateWithCredential(user,EmailAuthProvider.credential(user.email,password));const collections=["paymentRequests","activityDays","activityNotifications"];const refs=[];for(const name of collections){const snap=await getDocs(query(collection(firestoreDb,name),where("userId","==",user.uid)));snap.docs.forEach(d=>refs.push(d.ref));}refs.push(doc(firestoreDb,"users",user.uid),doc(firestoreDb,"userData",user.uid),doc(firestoreDb,"memberships",user.uid));for(let i=0;i<refs.length;i+=400){const batch=writeBatch(firestoreDb);refs.slice(i,i+400).forEach(ref=>batch.delete(ref));await batch.commit();}await deleteUser(user);}else{const response=await fetch(`${import.meta.env.VITE_API_URL||""}/api/account`,{method:"DELETE",headers:{"Content-Type":"application/json",Authorization:`Bearer ${localStorage.getItem("fit-token")}`},body:JSON.stringify({password})});const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||"Account deletion failed");}for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i);if(key?.startsWith("fit-"))localStorage.removeItem(key);}window.location.reload()}catch(error){onToast?.(error.message||"Account deletion failed. Please sign in again and retry.");}};
 
  if(page==="Walking Tracker")return <WalkingTracker onToast={onToast}/>;
