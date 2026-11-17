@@ -329,7 +329,7 @@ app.post("/api/admin/payments/:id/review", ready, async (req,res) => {
 });
 
 function validActivityDate(value) {
-  return typeof value==="string" && /^\\d{4}-\\d{2}-\\d{2}$/.test(value) && !Number.isNaN(Date.parse(value+"T00:00:00Z"));
+  return typeof value==="string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value+"T00:00:00Z"));
 }
 app.get("/api/activity/today", ready, auth, async (req,res) => {
   try {
