@@ -72,8 +72,12 @@ function WalkingTracker({onToast}){
      const {CapacitorPedometer}=await import("@capgo/capacitor-pedometer");
      const available=await CapacitorPedometer.isAvailable();
      if(!available.stepCounting)throw new Error("This phone does not expose a supported step sensor.");
-     const permission=await CapacitorPedometer.checkPermissions();
-     if(permission.activityRecognition!=="granted")await CapacitorPedometer.requestPermissions();
+     let permission=await CapacitorPedometer.checkPermissions();
+     if(permission.activityRecognition!=="granted"){
+       await CapacitorPedometer.requestPermissions();
+       permission=await CapacitorPedometer.checkPermissions();
+     }
+     if(permission.activityRecognition!=="granted")throw new Error("Activity recognition permission was not granted. Enable it in Android app settings to count steps.");
      if(pedometerRef.current)await pedometerRef.current.remove();
      pedometerRef.current=await CapacitorPedometer.addListener("measurement",data=>{
        const count=Math.max(0,Number(data.numberOfSteps)||0);
@@ -95,7 +99,9 @@ function WalkingTracker({onToast}){
      const {Health}=await import("@capgo/capacitor-health");
      const availability=await Health.isAvailable();
      if(!availability.available)throw new Error(availability.reason||"Health Connect is available only in the installed mobile app, not the website preview.");
-     await Health.requestAuthorization({read:["steps","distance","calories","heartRate"],write:[]});
+     const authorization=await Health.requestAuthorization({read:["steps","distance","calories","heartRate"],write:[]});
+     const denied=authorization?.readDenied||[];
+     if(denied.length)throw new Error("Health data permission not granted for: "+denied.join(", ")+". You can enable access in Health Connect settings.");
      const start=new Date();start.setHours(0,0,0,0);
      const end=new Date();
      const [stepData,distanceData,heartData]=await Promise.all([
@@ -125,6 +131,18 @@ function WalkingTracker({onToast}){
    localStorage.setItem("fit-step-source","Manual");
    onToast?.("Steps added");
  }
+ async function syncStepsToAccount(){
+   try{
+     const response=await fetch(`${import.meta.env.VITE_API_URL||""}/api/activity/today`,{
+       method:"PUT",
+       headers:{"Content-Type":"application/json",Authorization:`Bearer ${localStorage.getItem("fit-token")}`},
+       body:JSON.stringify({date,steps,stepGoal:target})
+     });
+     const data=await response.json().catch(()=>({}));
+     if(!response.ok)throw new Error(data.error||"Could not sync walking activity.");
+     onToast?.("Walking activity synced to your FIT account");
+   }catch(error){setStatus(error.message||"Sign in to sync activity to your FIT account.");}
+ }
  return <div className="feature-page walking-page">
    <div className="section-heading"><div><div className="eyebrow">DAILY ACTIVITY</div><h2>Walking Tracker</h2><p className="muted">Your daily movement, synced with supported health apps and fitness bands.</p></div><span className="feature-tag"><Footprints size={14}/> {source}</span></div>
    <section className="panel walking-main">
@@ -139,7 +157,7 @@ function WalkingTracker({onToast}){
      <p className="tiny-note">Daily totals are stored on this device. Earlier days appear when steps were logged or synced on those dates.</p>
    </section>
    <div className="walking-grid">
-     <section className="panel"><div className="eyebrow">FITNESS BAND / PHONE SYNC</div><h3>Connect your device</h3><p className="tiny-note">FIT can count steps from a supported phone sensor and read steps, distance and heart-rate data shared to Android Health Connect or Apple Health by supported bands. First sync your band in its own companion app, then allow FIT access.</p><button className="primary-btn" disabled={busy} onClick={connectAndSync}>{busy?"Connecting…":"Connect / Sync Health data"}</button><button className="outline-btn walking-settings" onClick={tracking?stopPhoneTracking:startPhoneTracking}>{tracking?"Pause phone step tracking":"Start phone step tracking"}</button><button className="outline-btn walking-settings" onClick={async()=>{try{const {Health}=await import("@capgo/capacitor-health");await Health.openHealthConnectSettings();}catch{setStatus("Health Connect settings are available in the installed Android app.");}}}>Open Health Connect settings</button><p className="tiny-note">{status}</p></section>
+     <section className="panel"><div className="eyebrow">FITNESS BAND / PHONE SYNC</div><h3>Connect your device</h3><p className="tiny-note">FIT can count steps from a supported phone sensor and read steps, distance and heart-rate data shared to Android Health Connect or Apple Health by supported bands. First sync your band in its own companion app, then allow FIT access.</p><button className="primary-btn" disabled={busy} onClick={connectAndSync}>{busy?"Connecting…":"Connect / Sync Health data"}</button><button className="outline-btn walking-settings" onClick={syncStepsToAccount}>Sync steps to my FIT account</button><button className="outline-btn walking-settings" onClick={tracking?stopPhoneTracking:startPhoneTracking}>{tracking?"Pause phone step tracking":"Start phone step tracking"}</button><button className="outline-btn walking-settings" onClick={async()=>{try{const {Health}=await import("@capgo/capacitor-health");await Health.openHealthConnectSettings();}catch{setStatus("Health Connect settings are available in the installed Android app.");}}}>Open Health Connect settings</button><p className="tiny-note">{status}</p></section>
      <section className="panel"><div className="eyebrow">MANUAL STEP ENTRY</div><h3>Add steps</h3><form className="walking-manual" onSubmit={addManual}><label>Steps to add<input type="number" min="1" max="100000" value={manual} onChange={e=>setManual(e.target.value)} placeholder="e.g. 2500" required/></label><button className="outline-btn">Add steps</button></form><p className="tiny-note">Manual entries are kept separate from verified sensor readings in the source label.</p></section>
    </div>
    <p className="tiny-note">Distance and calories shown for manual step entries are estimates using a general stride and energy factor; actual values vary by height, pace and body weight. Health data access is optional and can be revoked in device settings.</p>
