@@ -1,4 +1,4 @@
-const base=(process.env.FIT_API_URL||"http://localhost:5000").replace(/\\/$/,"");
+const base=(process.env.FIT_API_URL||"http://localhost:5000").replace(/\/$/,"");
 const checks=[];
 async function check(name,fn){try{await fn();checks.push({name,ok:true});}catch(error){checks.push({name,ok:false,error:error.message});}}
 async function json(path,options={}){const response=await fetch(base+path,options);return {response,data:await response.json().catch(()=>({}))};}
