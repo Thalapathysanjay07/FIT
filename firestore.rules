@@ -75,7 +75,17 @@ service cloud.firestore {
       allow update: if signedIn()
         && resource.data.userId == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
-      allow create, delete: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['userId', 'kind', 'title', 'body', 'createdAt', 'readAt'])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.kind in ['step_goal', 'workout']
+        && request.resource.data.title is string
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.body is string
+        && request.resource.data.body.size() <= 300
+        && request.resource.data.createdAt is string
+        && request.resource.data.readAt == null;
+      allow delete: if false;
     }
 
     // System metadata, admin data, and every unspecified collection stay private.
