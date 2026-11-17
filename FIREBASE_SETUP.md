@@ -49,3 +49,16 @@ firebase deploy --only firestore:rules
 ```
 
 Do not deploy permissive test rules. Rules must scope every user-owned document to the authenticated UID and must prevent clients from modifying membership entitlements or admin records.
+
+## Firebase-authenticated API endpoints (staged)
+
+The backend now exposes these Firebase ID-token-protected endpoints:
+
+- `GET /api/firebase/me` — verifies the Firebase ID token and creates/reads a minimal `users/{uid}` profile.
+- `GET /api/firebase/data` — reads the signed-in user's `userData/{uid}` document.
+- `PUT /api/firebase/data` — writes only that user's bounded `fit-*` app data.
+- `GET /api/firebase/health` — checks Admin SDK / Firestore connectivity.
+
+Send the Firebase ID token as `Authorization: Bearer <ID_TOKEN>`. The server verifies token revocation and derives the UID from the verified token; never accept a UID supplied in the request body as the account identity.
+
+**Important:** The current sign-in screen and several app features still use the legacy PostgreSQL/JWT endpoints. These new endpoints are an additive migration layer and do not mean the frontend has switched to Firebase yet. Do not remove the legacy database until AuthGate, membership, payments, activity, coach, and account deletion have all been migrated and tested.
