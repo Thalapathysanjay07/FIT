@@ -1,4 +1,5 @@
-import { firebaseAuth } from "./firebase.js";
+import { doc, setDoc } from "firebase/firestore";
+import { firebaseAuth, firestoreDb } from "./firebase.js";
 import {useEffect,useState} from "react";
 import FeatureHub from "./FeatureHub.jsx";
 import {Activity,Apple,BarChart3,CalendarDays,Check,ChevronRight,Crown,Dumbbell,Flame,Footprints,Home,Menu,Plus,Search,Sparkles,Target,Timer,Trophy,TrendingUp,Utensils,Wallet,Users,HeartPulse,X,Zap} from "lucide-react";
@@ -54,13 +55,20 @@ useEffect(()=>{
       }
     }
     try{
-      const token=firebaseMode?await currentUser.getIdToken():legacyToken;
-      const endpoint=firebaseMode?"/api/firebase/data":"/api/data";
-      await fetch(`${import.meta.env.VITE_API_URL||""}${endpoint}`,{
-        method:"PUT",
-        headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},
-        body:JSON.stringify({data})
-      });
+      if(firebaseMode){
+        if(!firestoreDb)throw new Error("Firestore is not configured.");
+        await setDoc(doc(firestoreDb,"userData",currentUser.uid),{
+          uid:currentUser.uid,
+          data,
+          updatedAt:new Date().toISOString()
+        });
+      }else{
+        await fetch(`${import.meta.env.VITE_API_URL||""}/api/data`,{
+          method:"PUT",
+          headers:{"Content-Type":"application/json",Authorization:`Bearer ${legacyToken}`},
+          body:JSON.stringify({data})
+        });
+      }
     }catch(error){console.warn("FIT data sync failed:",error);}
   };
   const timer=setInterval(sync,5000);
