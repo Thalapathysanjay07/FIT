@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import pg from "pg";
 import QRCode from "qrcode";
+import { timingSafeEqual } from "node:crypto";
 
 const { Pool } = pg;
 const app = express();
@@ -25,6 +26,7 @@ app.use(express.json({ limit: "256kb" }));
 app.use("/api/auth", rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false }));
 app.use("/api/coach", rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false }));
 app.use("/api/payments", rateLimit({ windowMs: 60 * 60 * 1000, limit: 8, standardHeaders: true, legacyHeaders: false }));
+app.use("/api/admin", rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false }));
 
 async function ready(req,res,next) {
   if (!pool) return res.status(503).json({ error: "Database is not configured. Set DATABASE_URL." });
@@ -68,6 +70,11 @@ async function init() {
 function tokenFor(user) {
   if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) throw new Error("JWT_SECRET must contain at least 32 characters.");
   return jwt.sign({ sub: String(user.id), email: user.email }, process.env.JWT_SECRET, { expiresIn: "7d", issuer: "fit-api", audience: "fit-app" });
+}
+function adminAuthorized(req) {
+  const configured=Buffer.from(String(process.env.FIT_ADMIN_KEY||""));
+  const supplied=Buffer.from(String(req.headers["x-fit-admin-key"]||""));
+  return configured.length>=24 && configured.length===supplied.length && timingSafeEqual(configured,supplied);
 }
 function auth(req,res,next) {
   const value = req.headers.authorization || "";
@@ -260,18 +267,15 @@ app.post("/api/payments/upi-request", ready, auth, async (req,res) => {
   }
 });
 app.get("/api/admin/payments", ready, async (req,res) => {
-  const supplied = String(req.headers["x-fit-admin-key"] || "");
-  if (!process.env.FIT_ADMIN_KEY || supplied.length < 24 || supplied !== process.env.FIT_ADMIN_KEY) return res.status(401).json({error:"Admin authorization required."});
+  if (!adminAuthorized(req)) return res.status(401).json({error:"Admin authorization required."});
+  res.set("Cache-Control","no-store");
   try {
     const result = await pool.query(`SELECT p.id,p.plan_code,p.amount_paise,p.utr,p.status,p.created_at,u.name,u.email FROM payment_requests p JOIN users u ON u.id=p.user_id ORDER BY CASE WHEN p.status='pending' THEN 0 ELSE 1 END,p.created_at DESC LIMIT 100`);
     res.json({payments:result.rows});
   } catch(error) { console.error("Admin payment list error:",error.message);res.status(500).json({error:"Could not load payment requests."}); }
 });
 app.post("/api/admin/payments/:id/review", ready, async (req,res) => {
-  const supplied = String(req.headers["x-fit-admin-key"] || "");
-  if (!process.env.FIT_ADMIN_KEY || supplied.length < 24 || supplied !== process.env.FIT_ADMIN_KEY) {
-    return res.status(401).json({ error:"Admin authorization required." });
-  }
+  if (!adminAuthorized(req)) return res.status(401).json({ error:"Admin authorization required." });
   const id = Number(req.params.id);
   const decision = String(req.body?.decision || "");
   if (!Number.isSafeInteger(id) || id < 1 || !["approve","reject"].includes(decision)) {
