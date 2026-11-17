@@ -70,3 +70,46 @@ A separate `src/FirebaseAuthGate.jsx` now implements Firebase email/password reg
 **Keep `VITE_USE_FIREBASE_AUTH=false` for now.** The membership, UPI payment review, FIT Coach, activity/leaderboard, and account deletion flows still call legacy PostgreSQL/JWT endpoints. Enabling Firebase sign-in before those routes are migrated will cause those parts of the app to fail. The Firebase auth gate and Firebase data sync are staged but not yet the production default.
 
 When enabled after the remaining API migration, set `VITE_USE_FIREBASE_AUTH=true` in the frontend host environment and redeploy. The Firebase Web app settings must also be configured, and Email/Password must be enabled under Firebase Console → Authentication → Sign-in method.
+
+## Current Firebase-first frontend implementation
+
+The frontend migration now includes:
+
+- Firebase email/password registration, sign-in, password reset and session persistence.
+- Per-user Firestore profile and fitness-state documents.
+- Direct Firestore sync for walking steps, workout counts, leaderboard opt-in and activity notifications.
+- Direct Firestore UPI payment-request submission and membership reads.
+- Firebase-mode account deletion with recent-login reauthentication and deletion of the user's own records.
+- On-device FIT Coach templates in Firebase mode. This is not generative AI and does not call a paid AI provider.
+- Manual owner verification for payments. The owner updates `paymentRequests/{UTR}` and `memberships/{uid}` in the Firebase Console; clients cannot grant Premium.
+
+### Frontend environment variables
+
+Set these in Netlify (or `.env.local` for local development):
+
+- All five `VITE_FIREBASE_*` Web App values listed above.
+- `VITE_USE_FIREBASE_AUTH=true`
+- `VITE_FIT_UPI_ID` — public merchant UPI ID used to build the payment QR.
+- `VITE_FIT_MERCHANT_NAME` — merchant display name.
+
+The UPI ID is public payment-routing information, not an API secret. Never put bank passwords, UPI PINs, OTPs, or private keys in these variables.
+
+### Owner payment review in Spark mode
+
+There is no privileged payment-review API in the Spark-only architecture. In the Firebase Console, verify each UTR independently, then update the payment request status. For approved requests, set `memberships/{uid}` with:
+
+- `userId`: the request's userId
+- `planCode`: `quarterly`
+- `startsAt`: ISO timestamp
+- `expiresAt`: ISO timestamp 90 days after startsAt
+- `paymentRequestId`: the UTR document ID
+
+Do not expose Firebase Console owner credentials or grant project-owner roles to ordinary users.
+
+### Important remaining boundaries
+
+- Existing PostgreSQL accounts are not automatically migrated to Firebase Authentication. Users must create Firebase accounts; legacy password hashes cannot be imported as Firebase passwords. Historical PostgreSQL records need a verified UID-linking migration before old accounts/data can be safely imported.
+- FIT Coach in Firebase mode uses local templates. Real generative AI needs a separately secured provider service; do not put provider API keys in the browser.
+- Health Connect / phone sensors require a compatible installed Android app and device permissions; a browser cannot read phone pedometer hardware directly.
+- Firebase Cloud Messaging receiving can be added on supported clients, but automated sending and scheduled campaigns need trusted server infrastructure.
+- The legacy Express/PostgreSQL backend remains in the repository for backward compatibility. The Firebase-mode frontend paths are designed not to call it for sign-in, app data, activity, payments, coach, or account deletion. Do not delete the old backend/database until a real deployment test and legacy-data export are complete.
