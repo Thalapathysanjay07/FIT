@@ -27,13 +27,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['uid', 'data', 'updatedAt'])
         && request.resource.data.uid == uid
         && request.resource.data.data is map
-        && request.resource.data.data.size() <= 100
-        && request.resource.data.data.keys().hasOnly([
-          'fit-done', 'fit-goal', 'fit-level', 'fit-cal', 'fit-pro',
-          'fit-weights', 'fit-ch', 'fit-meals', 'fit-water',
-          'fit-walking', 'fit-workouts', 'fit-streak', 'fit-achievements',
-          'fit-notification-settings', 'fit-profile', 'fit-settings'
-        ]);
+        && request.resource.data.data.size() <= 100;
       allow delete: if owns(uid);
     }
 
