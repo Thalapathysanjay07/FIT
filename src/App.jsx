@@ -28,7 +28,7 @@ function AdminPanel(){
 }
 
 export default function App({onSignOut,user}){
-const [page,S]=useState("Overview"),[mobile,M]=useState(false),[meals,SM]=useState(initialMeals),[done,SD]=useState(()=>read("fit-done",[])),[goal,SG]=useState(()=>read("fit-goal","Muscle gain")),[level,SL]=useState(()=>read("fit-level","Beginner")),[calTarget,SC]=useState(()=>read("fit-cal",2000)),[proTarget,SP]=useState(()=>read("fit-pro",120)),[water,SW]=useState(initialWater),[weights,SWt]=useState(()=>read("fit-weights",[])),[weightInput,SWeightInput]=useState(""),[ch,SH]=useState(()=>read("fit-ch",{})),[modal,SMo]=useState(false),[name,SN]=useState(""),[cal,SCal]=useState(""),[pro,SPro]=useState(""),[search,SS]=useState(""),[prompt,SPr]=useState(""),[reply,SR]=useState(""),[coachLoading,SCoachLoading]=useState(false),[coachMode,SCoachMode]=useState("chat"),[paymentConfig,SPaymentConfig]=useState(null),[membership,SMembership]=useState(null),[payments,SPayments]=useState([]),[selectedPlan,SSelectedPlan]=useState("monthly"),[utr,SUTR]=useState(""),[paymentBusy,SPaymentBusy]=useState(false),[paymentError,SPaymentError]=useState(""),[paymentMessage,SPaymentMessage]=useState(""),[toast,ST]=useState("");
+const [page,S]=useState("Overview"),[mobile,M]=useState(false),[meals,SM]=useState(initialMeals),[done,SD]=useState(()=>read("fit-done",[])),[goal,SG]=useState(()=>read("fit-goal","Muscle gain")),[level,SL]=useState(()=>read("fit-level","Beginner")),[calTarget,SC]=useState(()=>read("fit-cal",2000)),[proTarget,SP]=useState(()=>read("fit-pro",120)),[water,SW]=useState(initialWater),[weights,SWt]=useState(()=>read("fit-weights",[])),[weightInput,SWeightInput]=useState(""),[ch,SH]=useState(()=>read("fit-ch",{})),[modal,SMo]=useState(false),[name,SN]=useState(""),[cal,SCal]=useState(""),[pro,SPro]=useState(""),[search,SS]=useState(""),[prompt,SPr]=useState(""),[reply,SR]=useState(""),[coachLoading,SCoachLoading]=useState(false),[coachMode,SCoachMode]=useState("chat"),[paymentConfig,SPaymentConfig]=useState(null),[qrData,SQrData]=useState(""),[membership,SMembership]=useState(null),[payments,SPayments]=useState([]),[selectedPlan,SSelectedPlan]=useState("monthly"),[utr,SUTR]=useState(""),[paymentBusy,SPaymentBusy]=useState(false),[paymentError,SPaymentError]=useState(""),[paymentMessage,SPaymentMessage]=useState(""),[toast,ST]=useState("");
 const cals=meals.reduce((s,m)=>s+Number(m.cal||0),0),protein=meals.reduce((s,m)=>s+Number(m.protein||0),0);
 const profile=read("fit-profile",{});
 const targetEstimate=estimateTargets(profile,goal);
@@ -56,12 +56,14 @@ useEffect(()=>{
   if(page!=="Membership")return;
   const token=localStorage.getItem("fit-token");
   const headers=token?{Authorization:`Bearer ${token}`}:{};
+  SPaymentError("");SQrData("");
   Promise.all([
     fetch(`${import.meta.env.VITE_API_URL||""}/api/membership/config`).then(r=>r.json()),
-    token?fetch(`${import.meta.env.VITE_API_URL||""}/api/membership/me`,{headers}).then(r=>r.ok?r.json():{membership:null,payments:[]}):Promise.resolve({membership:null,payments:[]})
-  ]).then(([config,status])=>{SPaymentConfig(config);SMembership(status.membership||null);SPayments(status.payments||[]);})
-    .catch(()=>SPaymentError("Could not load membership payment settings."));
-},[page]);
+    token?fetch(`${import.meta.env.VITE_API_URL||""}/api/membership/me`,{headers}).then(r=>r.ok?r.json():{membership:null,payments:[]}):Promise.resolve({membership:null,payments:[]}),
+    fetch(`${import.meta.env.VITE_API_URL||""}/api/membership/qr?plan=${selectedPlan}`).then(async r=>{const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"QR is unavailable");return d;})
+  ]).then(([config,status,qr])=>{SPaymentConfig(config);SMembership(status.membership||null);SPayments(status.payments||[]);SQrData(qr.qrDataUrl||"");})
+    .catch(error=>{SPaymentError(error.message||"Could not load membership payment settings.");});
+},[page,selectedPlan]);
 async function submitUpiReference(e){
   e.preventDefault();SPaymentError("");SPaymentMessage("");
   const token=localStorage.getItem("fit-token");
@@ -122,7 +124,7 @@ return <div className="app-shell"><aside className={`sidebar ${mobile?"open":""}
 <article className="panel price-card featured-price"><span className="status-pill">FIT PRO</span><h3>Monthly</h3><ul><li>✓ Personalised AI diet recommendations</li><li>✓ Goal-based AI workout plans</li><li>✓ Weekly AI progress reports</li><li>✓ Adaptive nutrition guidance</li></ul><div className="price">₹49 <small>/ month</small></div><p className="tiny-note">Flexible monthly access</p><button className={selectedPlan==="monthly"?"primary-btn":"outline-btn"} onClick={()=>SSelectedPlan("monthly")}>Choose monthly</button></article>
 <article className="panel price-card featured-price"><span className="status-pill">BEST VALUE</span><h3>Yearly</h3><div className="price">₹499 <small>/ year</small></div><p className="tiny-note">Save ₹89 compared with 12 monthly payments</p><button className={selectedPlan==="yearly"?"primary-btn":"outline-btn"} onClick={()=>SSelectedPlan("yearly")}>Choose yearly</button></article></div>
 <section className="panel income-panel"><div className="eyebrow"><Crown size={14}/> MEMBERSHIP PAYMENT</div><h3>Pay with UPI</h3>
-{paymentConfig?.upiId?<><p className="muted">Selected plan: {selectedPlan==="yearly"?"₹499 yearly":"₹49 monthly"}. Complete the UPI payment, then enter the transaction reference below. FIT Pro activates only after manual verification.</p><a className="outline-btn" href={`upi://pay?pa=${encodeURIComponent(paymentConfig.upiId)}&pn=${encodeURIComponent(paymentConfig.merchantName||"FIT")}&am=${selectedPlan==="yearly"?"499.00":"49.00"}&cu=INR&tn=${encodeURIComponent("FIT Pro "+selectedPlan)}`}>Open UPI app to pay</a>
+{paymentConfig?.upiId?<><p className="muted">Selected plan: {selectedPlan==="yearly"?"₹499 yearly":"₹49 monthly"}. Complete the UPI payment, then enter the transaction reference below. FIT Pro activates only after manual verification.</p><a className="outline-btn" href={`upi://pay?pa=${encodeURIComponent(paymentConfig.upiId)}&pn=${encodeURIComponent(paymentConfig.merchantName||"FIT")}&am=${selectedPlan==="yearly"?"499.00":"49.00"}&cu=INR&tn=${encodeURIComponent("FIT Pro "+selectedPlan)}`}>Open UPI app to pay</a>{qrData&&<div className="upi-qr-wrap"><img src={qrData} alt={`FIT Pro ${selectedPlan} UPI payment QR`} width="220" height="220"/><p className="tiny-note">Scan with any UPI app · {selectedPlan==="yearly"?"₹499":"₹49"}</p></div>}
 <form className="weight-form" onSubmit={submitUpiReference}><label>UPI transaction reference / UTR<input value={utr} onChange={e=>SUTR(e.target.value)} minLength="8" maxLength="80" placeholder="Enter UTR after payment" required/></label><button className="primary-btn" disabled={paymentBusy}>{paymentBusy?"Submitting…":"Submit payment reference"}</button></form>
 {paymentError&&<p className="auth-error">{paymentError}</p>}{paymentMessage&&<p className="tiny-note">{paymentMessage}</p>}
 </>:<p className="tiny-note">UPI payment is not configured yet. The app owner must add FIT_UPI_ID and FIT_MERCHANT_NAME to the backend environment. No payment can be submitted until then.</p>}
