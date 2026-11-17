@@ -179,7 +179,8 @@ function WalkingTracker({onToast}){
 
 function todayKey(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
 export default function FeatureHub({page,onToast,onSignOut,user,goal,level,onGoalChange,onLevelChange,onAddMeal}){
- const [profile,setProfile]=useState(()=>read("fit-profile",{name:user?.name||"",age:"",heightCm:"",weightKg:"",targetWeightKg:"",goal:goal||"Weight loss",level:level||"Beginner",equipment:"Bodyweight",dietStyle:"Mixed diet",daysPerWeek:3,sessionMinutes:30}));
+ const defaultProfile={name:user?.name||"",age:"",heightCm:"",weightKg:"",targetWeightKg:"",goal:goal||"Weight loss",level:level||"Beginner",equipment:"Bodyweight",dietStyle:"Mixed diet",daysPerWeek:3,sessionMinutes:30};
+ const [profile,setProfile]=useState(()=>{const saved=read("fit-profile",{});return saved&&typeof saved==="object"&&!Array.isArray(saved)?{...defaultProfile,...saved}:defaultProfile;});
  const [completed,setCompleted]=useState(()=>read("fit-session-log",{}));
  const [query,setQuery]=useState("");
  const [category,setCategory]=useState("All");
