@@ -151,7 +151,12 @@ app.post("/api/coach", ready, auth, async (req,res) => {
   const mode = String(req.body?.mode || "chat");
   if (!["chat","diet","workout","weekly-report"].includes(mode)) return res.status(400).json({error:"Choose a valid coach mode."});
   if (mode !== "chat") {
-    const membership = await activeMembership(req.user.sub).catch(()=>null);
+    let membership;
+    try { membership = await activeMembership(req.user.sub); }
+    catch(error) {
+      console.error("Coach membership verification failed:",error.message);
+      return res.status(503).json({error:"Membership verification is temporarily unavailable. Please retry."});
+    }
     if (!membership) return res.status(403).json({error:"FIT Pro is required for personalised AI plans and weekly reports.",code:"PREMIUM_REQUIRED"});
   }
   const question = String(req.body?.question || "").trim();
@@ -210,14 +215,15 @@ app.get("/api/membership/config", ready, async (_req,res) => {
 });
 app.get("/api/membership/me", ready, auth, async (req,res) => {
   const result = await pool.query(
-    "SELECT plan_code, starts_at, expires_at FROM memberships WHERE user_id=$1 AND expires_at>NOW()",
+    "SELECT plan_code, starts_at, expires_at FROM memberships WHERE user_id=$1 AND starts_at<=NOW() AND expires_at>NOW()",
     [req.user.sub]
   );
   const payments = await pool.query(
     "SELECT id,plan_code,amount_paise,utr,status,created_at FROM payment_requests WHERE user_id=$1 ORDER BY created_at DESC LIMIT 5",
     [req.user.sub]
   );
-  res.json({ membership: result.rows[0] || null, payments: payments.rows });
+  res.set("Cache-Control","no-store");
+  res.json({ membership: result.rows[0] || null, isPremium:!!result.rows[0], payments: payments.rows });
 });
 app.post("/api/payments/upi-request", ready, auth, async (req,res) => {
   const planCode = String(req.body?.planCode || "");
