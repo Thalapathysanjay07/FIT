@@ -8,6 +8,8 @@ on:
       - "public/**"
       - "package.json"
       - "capacitor.config.ts"
+      - "vite.config.js"
+      - "index.html"
       - ".github/workflows/android.yml"
 jobs:
   android:
