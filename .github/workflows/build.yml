@@ -16,3 +16,4 @@ jobs:
       - run: npm run build
       - run: npm install --prefix backend
       - run: node --check backend/server.js
+      - run: node --check backend/scripts/smoke-test.js
