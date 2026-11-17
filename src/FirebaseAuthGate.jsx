@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Activity, ArrowRight, LockKeyhole, Mail, UserRound } from "lucide-react";
-import { createUserWithEmailAndPassword, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { createUserWithEmailAndPassword, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, EmailAuthProvider, reauthenticateWithCredential, deleteUser } from "firebase/auth";
+import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, where, writeBatch } from "firebase/firestore";
 import App from "./App.jsx";
 import { firebaseAuth, firestoreDb, isFirebaseConfigured } from "./firebase.js";
 
@@ -107,6 +107,51 @@ export default function FirebaseAuthGate() {
     }
   }
 
+  async function deleteAccount() {
+    if (!firebaseAuth?.currentUser || !firestoreDb) return;
+    const currentUser = firebaseAuth.currentUser;
+    if (!currentUser.email) { setError("This account needs a supported reauthentication method before deletion."); return; }
+    if (!window.confirm("Permanently delete your FIT account and its Firebase fitness data? This cannot be undone.")) return;
+    const currentPassword = window.prompt("Enter your account password to confirm deletion:");
+    if (!currentPassword) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+      await reauthenticateWithCredential(currentUser, credential);
+      const ownedQueries = [
+        query(collection(firestoreDb, "activityDays"), where("userId", "==", currentUser.uid)),
+        query(collection(firestoreDb, "activityNotifications"), where("userId", "==", currentUser.uid)),
+        query(collection(firestoreDb, "paymentRequests"), where("userId", "==", currentUser.uid))
+      ];
+      const snapshots = await Promise.all(ownedQueries.map(getDocs));
+      const refs = snapshots.flatMap(snapshot => snapshot.docs.map(item => item.ref));
+      refs.push(
+        doc(firestoreDb, "users", currentUser.uid),
+        doc(firestoreDb, "userData", currentUser.uid),
+        doc(firestoreDb, "memberships", currentUser.uid)
+      );
+      for (let offset = 0; offset < refs.length; offset += 400) {
+        const batch = writeBatch(firestoreDb);
+        refs.slice(offset, offset + 400).forEach(ref => batch.delete(ref));
+        await batch.commit();
+      }
+      await deleteUser(currentUser);
+      hydrateFitnessData({});
+      localStorage.removeItem("fit-token");
+      setUser(null);
+      setNotice("Your FIT account and associated Firebase records were deleted.");
+    } catch (e) {
+      const messages = {
+        "auth/wrong-password": "Password is incorrect.",
+        "auth/invalid-credential": "Password is incorrect. Please try again.",
+        "auth/requires-recent-login": "Please sign in again and retry account deletion."
+      };
+      setError(messages[e.code] || e.message || "Could not delete the account.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function logout() {
     await signOut(firebaseAuth);
     localStorage.removeItem("fit-token");
@@ -116,7 +161,7 @@ export default function FirebaseAuthGate() {
   if (checking) return <div className="auth-loading"><Activity/> FIT</div>;
   if (user) {
     const profile = { id: user.uid, uid: user.uid, name: user.displayName || "FIT Member", email: user.email };
-    return <><div className="account-strip"><span>Signed in as <b>{profile.name}</b></span><button onClick={logout}>Sign out</button></div><App user={profile} onSignOut={logout}/></>;
+    return <><div className="account-strip"><span>Signed in as <b>{profile.name}</b></span><button onClick={logout}>Sign out</button><button onClick={deleteAccount} disabled={busy}>Delete account</button></div><App user={profile} onSignOut={logout}/></>;
   }
 
   return <main className="auth-screen">
