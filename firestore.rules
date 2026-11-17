@@ -17,7 +17,7 @@ service cloud.firestore {
       allow update: if owns(uid)
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['name', 'updatedAt']);
-      allow delete: if false;
+      allow delete: if owns(uid);
     }
 
     // Per-user app state. The user cannot write another user's document.
@@ -45,14 +45,16 @@ service cloud.firestore {
         && request.resource.data.utr.size() >= 6
         && request.resource.data.utr.size() <= 80
         && request.resource.data.status == 'pending';
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
     }
 
     // Premium entitlements are read-only to clients. Owner/admin changes happen
     // only through a trusted privileged process or the Firebase Console.
     match /memberships/{uid} {
       allow read: if owns(uid);
-      allow create, update, delete: if false;
+      allow create, update: if false;
+      allow delete: if owns(uid);
     }
 
     match /activityDays/{documentId} {
@@ -85,7 +87,7 @@ service cloud.firestore {
         && request.resource.data.body.size() <= 300
         && request.resource.data.createdAt is string
         && request.resource.data.readAt == null;
-      allow delete: if false;
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
     }
 
     // System metadata, admin data, and every unspecified collection stay private.
