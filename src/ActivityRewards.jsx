@@ -25,9 +25,9 @@ export default function ActivityRewards({onToast}){
   try{
    if(import.meta.env.VITE_USE_FIREBASE_AUTH==="true"){
     const user=firebaseAuth?.currentUser;if(!user||!firestoreDb)throw new Error("Please sign in to Firebase again.");
-    const activitySnap=await getDocs(query(collection(firestoreDb,"activityDays"),where("leaderboardOptIn","==",true)));
-    const from=keyFor(6);const totals=new Map();
-    activitySnap.docs.forEach(item=>{const d=item.data();if(d.activityDate<from||d.activityDate>today)return;const old=totals.get(d.userId)||{name:d.displayName||"FIT Member",steps:0,workouts:0};old.steps+=Number(d.steps||0);old.workouts+=Number(d.workouts||0);if(d.displayName)old.name=d.displayName;totals.set(d.userId,old);});
+    const from=keyFor(6);const activitySnap=await getDocs(query(collection(firestoreDb,"activityDays"),where("leaderboardOptIn","==",true),where("activityDate",">=",from),where("activityDate","<=",today)));
+    const totals=new Map();
+    activitySnap.docs.forEach(item=>{const d=item.data();const old=totals.get(d.userId)||{name:d.displayName||"FIT Member",steps:0,workouts:0};old.steps+=Number(d.steps||0);old.workouts+=Number(d.workouts||0);if(d.displayName)old.name=d.displayName;totals.set(d.userId,old);});
     setLeaderboard([...totals.values()].sort((a,b)=>b.steps-a.steps||b.workouts-a.workouts).slice(0,20));
     const ns=await getDocs(query(collection(firestoreDb,"activityNotifications"),where("userId","==",user.uid)));
     setNotifications(ns.docs.map(d=>{const x=d.data();return {id:d.id,title:x.title,body:x.body,created_at:x.createdAt,read_at:x.readAt};}).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at))).slice(0,30));
