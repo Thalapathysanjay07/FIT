@@ -121,9 +121,7 @@ async function submitUpiReference(e){
     if(import.meta.env.VITE_USE_FIREBASE_AUTH==="true"){
       const currentUser=firebaseAuth?.currentUser;if(!currentUser||!firestoreDb)throw new Error("Please sign in to Firebase again.");
       const cleanUtr=utr.trim().replace(/\\s/g,"");
-      const existing=await getDocs(query(collection(firestoreDb,"paymentRequests"),where("utr","==",cleanUtr)));
-      if(!existing.empty)throw new Error("This UTR has already been submitted.");
-      await addDoc(collection(firestoreDb,"paymentRequests"),{userId:currentUser.uid,planCode:"quarterly",amountPaise:4900,utr:cleanUtr,status:"pending",createdAt:new Date().toISOString()});
+      await setDoc(doc(firestoreDb,"paymentRequests",cleanUtr),{userId:currentUser.uid,planCode:"quarterly",amountPaise:4900,utr:cleanUtr,status:"pending",createdAt:new Date().toISOString()});
       SPaymentMessage("Payment reference submitted. FIT Pro activates only after the owner verifies the payment.");SUTR("");
       const history=await getDocs(query(collection(firestoreDb,"paymentRequests"),where("userId","==",currentUser.uid)));
       SPayments(history.docs.map(d=>({id:d.id,...d.data(),created_at:d.data().createdAt})).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at))));
@@ -182,7 +180,7 @@ return <div className="app-shell"><aside className={`sidebar ${mobile?"open":""}
 {paymentConfig?.upiId?<><p className="muted">Selected plan: {"₹49 for 3 months (90 days)"}. Complete the UPI payment, then enter the transaction reference below. FIT Pro activates only after manual verification.</p><a className="outline-btn" href={`upi://pay?pa=${encodeURIComponent(paymentConfig.upiId)}&pn=${encodeURIComponent(paymentConfig.merchantName||"FIT")}&am=${"49.00"}&cu=INR&tn=${encodeURIComponent("FIT Pro 3 Months")}`}>Open UPI app to pay</a>{qrData&&<div className="upi-qr-wrap"><img src={qrData} alt={`FIT Pro ${selectedPlan} UPI payment QR`} width="220" height="220"/><p className="tiny-note">Scan with any UPI app · {"₹49"}</p></div>}
 <form className="weight-form" onSubmit={submitUpiReference}><label>UPI transaction reference / UTR<input value={utr} onChange={e=>SUTR(e.target.value)} minLength="8" maxLength="80" placeholder="Enter UTR after payment" required/></label><button className="primary-btn" disabled={paymentBusy}>{paymentBusy?"Submitting…":"Submit payment reference"}</button></form>
 {paymentError&&<p className="auth-error">{paymentError}</p>}{paymentMessage&&<p className="tiny-note">{paymentMessage}</p>}{payments.length>0&&<div className="payment-history"><h4>Payment requests</h4>{payments.map(p=><div className="payment-history-row" key={p.id}><span>{"3 Months · ₹49"} · {p.utr}</span><strong className={p.status==="approved"?"payment-approved":p.status==="rejected"?"payment-rejected":"payment-pending"}>{p.status}</strong></div>)}</div>}
-</>:<p className="tiny-note">UPI payment is not configured yet. The app owner must add FIT_UPI_ID and FIT_MERCHANT_NAME to the backend environment. No payment can be submitted until then.</p>}
+</>:<p className="tiny-note">UPI payment is not configured yet. The app owner must add VITE_FIT_UPI_ID and VITE_FIT_MERCHANT_NAME to the frontend hosting environment. No payment can be submitted until then.</p>}
 {payments.length>0&&<div className="weight-history"><h3>Recent payment requests</h3>{payments.map(p=><div className="weight-entry" key={p.id}><span>{"3 Months · ₹49"} · {p.utr}</span><strong>{p.status}</strong></div>)}</div>}
 <p className="tiny-note">Payments are manually reviewed. Never share your UPI PIN or OTP with anyone.</p></section></>}
 {page==="Admin"&&<AdminPanel/>}
