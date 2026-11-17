@@ -65,6 +65,25 @@ async function init() {
       payment_request_id BIGINT REFERENCES payment_requests(id),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS activity_days (
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      activity_date DATE NOT NULL,
+      steps INTEGER NOT NULL DEFAULT 0 CHECK (steps >= 0 AND steps <= 200000),
+      step_goal INTEGER NOT NULL DEFAULT 8000 CHECK (step_goal BETWEEN 1000 AND 50000),
+      workouts INTEGER NOT NULL DEFAULT 0 CHECK (workouts >= 0 AND workouts <= 20),
+      leaderboard_opt_in BOOLEAN NOT NULL DEFAULT FALSE,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY(user_id, activity_date)
+    );
+    CREATE TABLE IF NOT EXISTS activity_notifications (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind VARCHAR(40) NOT NULL,
+      title VARCHAR(120) NOT NULL,
+      body VARCHAR(300) NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      read_at TIMESTAMPTZ
+    );
   `);
 }
 function tokenFor(user) {
@@ -308,6 +327,90 @@ app.post("/api/admin/payments/:id/review", ready, async (req,res) => {
     res.status(500).json({error:"Could not review payment."});
   } finally { client.release(); }
 });
+
+function validActivityDate(value) {
+  return typeof value==="string" && /^\\d{4}-\\d{2}-\\d{2}$/.test(value) && !Number.isNaN(Date.parse(value+"T00:00:00Z"));
+}
+app.get("/api/activity/today", ready, auth, async (req,res) => {
+  try {
+    const date=String(req.query.date||new Date().toISOString().slice(0,10));
+    if(!validActivityDate(date))return res.status(400).json({error:"Invalid activity date."});
+    const result=await pool.query("SELECT activity_date,steps,step_goal,workouts FROM activity_days WHERE user_id=$1 AND activity_date=$2",[req.user.sub,date]);
+    res.set("Cache-Control","no-store");
+    res.json({activity:result.rows[0]||{activity_date:date,steps:0,step_goal:8000,workouts:0}});
+  } catch(error){console.error("Activity read failed:",error.message);res.status(500).json({error:"Could not load activity."});}
+});
+app.put("/api/activity/today", ready, auth, async (req,res) => {
+  const date=String(req.body?.date||new Date().toISOString().slice(0,10));
+  const steps=Number(req.body?.steps),goal=Number(req.body?.stepGoal);
+  if(!validActivityDate(date)||!Number.isInteger(steps)||steps<0||steps>200000||!Number.isInteger(goal)||goal<1000||goal>50000)
+    return res.status(400).json({error:"Activity values are outside the allowed range."});
+  try{
+    const result=await pool.query(`INSERT INTO activity_days(user_id,activity_date,steps,step_goal)
+      VALUES($1,$2,$3,$4) ON CONFLICT(user_id,activity_date) DO UPDATE SET
+      steps=GREATEST(activity_days.steps,EXCLUDED.steps),step_goal=EXCLUDED.step_goal,updated_at=NOW()
+      RETURNING activity_date,steps,step_goal,workouts`,[req.user.sub,date,steps,goal]);
+    const row=result.rows[0];
+    if(row.steps>=row.step_goal){
+      const already=await pool.query("SELECT 1 FROM activity_notifications WHERE user_id=$1 AND kind='step_goal' AND created_at::date=$2 LIMIT 1",[req.user.sub,date]);
+      if(!already.rowCount)await pool.query("INSERT INTO activity_notifications(user_id,kind,title,body) VALUES($1,'step_goal','Daily step goal reached','You reached your step goal. Great consistency!')",[req.user.sub]);
+    }
+    res.json({activity:row});
+  }catch(error){console.error("Activity save failed:",error.message);res.status(500).json({error:"Could not save activity."});}
+});
+app.post("/api/activity/workout", ready, auth, async (req,res) => {
+  const date=String(req.body?.date||new Date().toISOString().slice(0,10));
+  if(!validActivityDate(date))return res.status(400).json({error:"Invalid workout date."});
+  try{
+    const result=await pool.query(`INSERT INTO activity_days(user_id,activity_date,workouts)
+      VALUES($1,$2,1) ON CONFLICT(user_id,activity_date) DO UPDATE SET
+      workouts=LEAST(activity_days.workouts+1,20),updated_at=NOW()
+      RETURNING workouts`,[req.user.sub,date]);
+    const count=result.rows[0].workouts;
+    await pool.query("INSERT INTO activity_notifications(user_id,kind,title,body) VALUES($1,'workout','Workout logged','Your workout has been added to today’s activity.')",[req.user.sub]);
+    res.status(201).json({workouts:count});
+  }catch(error){console.error("Workout log failed:",error.message);res.status(500).json({error:"Could not log workout."});}
+});
+app.put("/api/activity/leaderboard-opt-in", ready, auth, async (req,res) => {
+  const enabled=req.body?.enabled;
+  if(typeof enabled!=="boolean")return res.status(400).json({error:"Choose whether to join the leaderboard."});
+  try{
+    await pool.query(`INSERT INTO activity_days(user_id,activity_date,leaderboard_opt_in)
+      VALUES($1,CURRENT_DATE,$2) ON CONFLICT(user_id,activity_date)
+      DO UPDATE SET leaderboard_opt_in=EXCLUDED.leaderboard_opt_in,updated_at=NOW()`,[req.user.sub,enabled]);
+    await pool.query("UPDATE activity_days SET leaderboard_opt_in=$2 WHERE user_id=$1",[req.user.sub,enabled]);
+    res.json({leaderboardOptIn:enabled});
+  }catch(error){console.error("Leaderboard preference failed:",error.message);res.status(500).json({error:"Could not update leaderboard preference."});}
+});
+app.get("/api/activity/leaderboard", ready, auth, async (req,res) => {
+  try{
+    const result=await pool.query(`SELECT u.name, SUM(a.steps)::int AS steps, SUM(a.workouts)::int AS workouts
+      FROM activity_days a JOIN users u ON u.id=a.user_id
+      WHERE a.activity_date>=CURRENT_DATE-6 AND a.activity_date<=CURRENT_DATE
+      GROUP BY a.user_id,u.name
+      HAVING BOOL_OR(a.leaderboard_opt_in)=TRUE
+      ORDER BY steps DESC,workouts DESC LIMIT 20`);
+    res.set("Cache-Control","no-store");
+    res.json({leaderboard:result.rows});
+  }catch(error){console.error("Leaderboard load failed:",error.message);res.status(500).json({error:"Could not load leaderboard."});}
+});
+app.get("/api/activity/notifications", ready, auth, async (req,res) => {
+  try{
+    const result=await pool.query("SELECT id,kind,title,body,created_at,read_at FROM activity_notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 30",[req.user.sub]);
+    res.set("Cache-Control","no-store");
+    res.json({notifications:result.rows});
+  }catch(error){console.error("Notifications load failed:",error.message);res.status(500).json({error:"Could not load notifications."});}
+});
+app.post("/api/activity/notifications/:id/read", ready, auth, async (req,res) => {
+  const id=Number(req.params.id);
+  if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({error:"Invalid notification."});
+  try{
+    const result=await pool.query("UPDATE activity_notifications SET read_at=NOW() WHERE id=$1 AND user_id=$2 RETURNING id",[id,req.user.sub]);
+    if(!result.rowCount)return res.status(404).json({error:"Notification not found."});
+    res.json({read:true});
+  }catch(error){console.error("Notification update failed:",error.message);res.status(500).json({error:"Could not update notification."});}
+});
+
 app.get("/api/data", ready, auth, async (req,res) => {
   const r = await pool.query("SELECT data FROM user_data WHERE user_id=$1", [req.user.sub]);
   res.json({ data:r.rows[0]?.data || {} });
