@@ -6,6 +6,7 @@ import rateLimit from "express-rate-limit";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import pg from "pg";
+import QRCode from "qrcode";
 
 const { Pool } = pg;
 const app = express();
@@ -206,6 +207,20 @@ const membershipPlans = {
   monthly: { name: "FIT Pro Monthly", amountPaise: 4900, days: 30 },
   yearly: { name: "FIT Pro Yearly", amountPaise: 49900, days: 365 }
 };
+app.get("/api/membership/qr", ready, async (req,res) => {
+  const planCode=String(req.query.plan||"monthly");
+  const plan=membershipPlans[planCode];
+  const upiId=String(process.env.FIT_UPI_ID||"");
+  if(!plan)return res.status(400).json({error:"Choose a valid membership plan."});
+  if(!/^[A-Za-z0-9._-]{2,256}@[A-Za-z0-9.-]{2,64}$/.test(upiId))return res.status(503).json({error:"A valid merchant UPI ID is not configured."});
+  try{
+    const params=new URLSearchParams({pa:upiId,pn:process.env.FIT_MERCHANT_NAME||"FIT",am:(plan.amountPaise/100).toFixed(2),cu:"INR",tn:plan.name});
+    const paymentUri="upi://pay?"+params.toString();
+    const qr=await QRCode.toDataURL(paymentUri,{errorCorrectionLevel:"M",margin:2,width:280});
+    res.set("Cache-Control","no-store");
+    res.json({qrDataUrl:qr,amount:plan.amountPaise/100,planCode});
+  }catch(error){console.error("UPI QR generation failed:",error.message);res.status(500).json({error:"Could not generate the payment QR."});}
+});
 app.get("/api/membership/config", ready, async (_req,res) => {
   res.json({
     upiId: process.env.FIT_UPI_ID || "",
@@ -277,7 +292,8 @@ app.post("/api/admin/payments/:id/review", ready, async (req,res) => {
       await client.query(`INSERT INTO memberships(user_id,plan_code,starts_at,expires_at,payment_request_id)
         VALUES($1,$2,NOW(),NOW()+($3 * INTERVAL '1 day'),$4)
         ON CONFLICT(user_id) DO UPDATE SET plan_code=EXCLUDED.plan_code,
-        starts_at=NOW(),expires_at=NOW()+($3 * INTERVAL '1 day'),
+        starts_at=CASE WHEN memberships.expires_at>NOW() THEN memberships.starts_at ELSE NOW() END,
+        expires_at=GREATEST(memberships.expires_at,NOW())+($3 * INTERVAL '1 day'),
         payment_request_id=EXCLUDED.payment_request_id,updated_at=NOW()`,
         [payment.user_id,payment.plan_code,days,id]);
     }
