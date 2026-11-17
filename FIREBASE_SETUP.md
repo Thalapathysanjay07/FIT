@@ -17,7 +17,7 @@ Create the Firebase project and choose **Mumbai (asia-south1)** for Firestore be
 1. In Firebase Console, create the FIT project (or select the existing FIT project).
 2. Under Build → Authentication → Get started, enable **Email/Password**.
 3. Under Build → Firestore Database, create the production database in **Mumbai (asia-south1)**. Choose production mode.
-4. Under Authentication → Settings → Authorized domains, add the deployed Netlify domain (for example, `uzhavagam.netlify.app` is NOT the FIT domain; use the actual FIT site domain) and any custom FIT domain.
+4. Under Authentication → Settings → Authorized domains, add the exact deployed FIT Netlify domain and any custom FIT domain.
 5. Register a Web app under Project settings → General → Your apps.
 
 ## Web app configuration
