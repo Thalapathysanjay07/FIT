@@ -69,7 +69,7 @@ export default function ActivityRewards({onToast}){
    if(import.meta.env.VITE_USE_FIREBASE_AUTH==="true"){
     const user=firebaseAuth?.currentUser;if(!user||!firestoreDb)throw new Error("Please sign in to Firebase again.");
     const refs=await getDocs(query(collection(firestoreDb,"activityDays"),where("userId","==",user.uid)));
-    const updates=refs.docs.filter(d=>d.data().activityDate>=keyFor(6)&&d.data().activityDate<=today);
+    const updates=value?refs.docs.filter(d=>d.data().activityDate>=keyFor(6)&&d.data().activityDate<=today):refs.docs;
     for(const item of updates)await setDoc(item.ref,{leaderboardOptIn:value,displayName:user.displayName||"FIT Member",updatedAt:new Date().toISOString()},{merge:true});
     const todayRef=doc(firestoreDb,"activityDays",user.uid+"_"+today);const todaySnap=await getDoc(todayRef);
     if(!todaySnap.exists())await setDoc(todayRef,{userId:user.uid,activityDate:today,steps,stepGoal:goal,workouts:0,leaderboardOptIn:value,displayName:user.displayName||"FIT Member",updatedAt:new Date().toISOString()});
