@@ -1,7 +1,9 @@
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 
 let firestore = null;
+let firebaseAuth = null;
 let projectId = process.env.FIREBASE_PROJECT_ID || "";
 let configurationError = null;
 
@@ -17,6 +19,7 @@ if (rawServiceAccount) {
       ? getApps()[0]
       : initializeApp({ credential: cert(serviceAccount), projectId: projectId || serviceAccount.project_id });
     firestore = getFirestore(app);
+    firebaseAuth = getAuth(app);
   } catch (error) {
     configurationError = error;
     console.error("Firebase Admin configuration is invalid:", error.message);
@@ -40,4 +43,9 @@ export async function verifyFirestoreConnection() {
 export function getFirestoreDb() {
   if (!firestore) throw new Error("Firestore is not configured. Set FIREBASE_SERVICE_ACCOUNT on the backend.");
   return firestore;
+}
+
+export async function verifyFirebaseIdToken(idToken) {
+  if (!firebaseAuth) throw new Error("Firebase Admin Authentication is not configured.");
+  return firebaseAuth.verifyIdToken(idToken, true);
 }
