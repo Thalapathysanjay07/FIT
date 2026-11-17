@@ -212,7 +212,7 @@ export default function FeatureHub({page,onToast,onSignOut,user,goal,level,onGoa
  };
  const exportData=async()=>{try{
   const localData=Object.fromEntries(Object.keys(localStorage).filter(k=>k.startsWith("fit-")&&k!=="fit-token").map(k=>[k,read(k,null)]));
-  const data={exportedAt:new Date().toISOString(),profile,sessionLog:completed,fitnessData:localData,cloudData:null};
+  const data={schemaVersion:1,app:"FIT",exportedAt:new Date().toISOString(),account:import.meta.env.VITE_USE_FIREBASE_AUTH==="true"?{uid:firebaseAuth?.currentUser?.uid||null,email:firebaseAuth?.currentUser?.email||null}:null,profile,sessionLog:completed,fitnessData:localData,cloudData:null};
   if(import.meta.env.VITE_USE_FIREBASE_AUTH==="true"){
     const user=firebaseAuth?.currentUser;
     if(!user||!firestoreDb)throw new Error("Sign in to export your Firebase data.");
