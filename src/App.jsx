@@ -1,3 +1,4 @@
+import { firebaseAuth } from "./firebase.js";
 import {useEffect,useState} from "react";
 import FeatureHub from "./FeatureHub.jsx";
 import {Activity,Apple,BarChart3,CalendarDays,Check,ChevronRight,Crown,Dumbbell,Flame,Footprints,Home,Menu,Plus,Search,Sparkles,Target,Timer,Trophy,TrendingUp,Utensils,Wallet,Users,HeartPulse,X,Zap} from "lucide-react";
