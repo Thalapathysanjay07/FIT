@@ -74,3 +74,8 @@
 .upi-qr-wrap .tiny-note{color:#334033;margin:0}
 .coach-modes{flex-wrap:wrap;gap:8px}
 .coach-modes button.selected{border-color:var(--accent,#b6f36b);color:var(--accent,#b6f36b)}
+
+.payment-history{margin-top:18px;border-top:1px solid rgba(255,255,255,.1);padding-top:14px}
+.payment-history h4{margin:0 0 8px}
+.payment-history-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.07);font-size:13px}
+.payment-approved{color:#a8e986}.payment-pending{color:#f2cb75}.payment-rejected{color:#ef8585}
