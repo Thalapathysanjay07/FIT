@@ -11,7 +11,7 @@ Set `VITE_API_URL` to the public HTTPS URL of the deployed FIT API, without a tr
 ## Backend environment
 Configure these variables in the backend hosting dashboard. Never commit real values:
 - `DATABASE_URL`: PostgreSQL connection string.
-- `DATABASE_SSL=true`: enable TLS where required by the database provider.
+- `DATABASE_SSL=true`: enable TLS with certificate verification; use a PostgreSQL provider with a trusted certificate chain.
 - `JWT_SECRET`: random secret with at least 32 characters.
 - `CLIENT_ORIGIN`: exact HTTPS frontend origin in production; multiple origins may be comma-separated. Wildcard origins are rejected.
 - `OPENAI_API_KEY`: optional until AI Coach is enabled.
