@@ -17,7 +17,7 @@ export default function ActivityRewards({onToast}){
  const [error,setError]=useState("");
  const [syncing,setSyncing]=useState(false);
  const sessions=read("fit-session-log",{});
- const completedDays=useMemo(()=>{const days=new Set();Object.entries(sessions).forEach(([k,v])=>{if(v){const d=k.slice(0,10);if(/^\\d{4}-\\d{2}-\\d{2}$/.test(d))days.add(d);}});return days;},[]);
+ const completedDays=useMemo(()=>{const days=new Set();Object.entries(sessions).forEach(([k,v])=>{if(v){const d=k.slice(0,10);if(/^\d{4}-\d{2}-\d{2}$/.test(d))days.add(d);}});return days;},[]);
  const workoutStreak=useMemo(()=>{let n=0;for(let i=0;i<365;i++){if(completedDays.has(keyFor(i)))n++;else if(i===0)continue;else break;}return n;},[completedDays]);
  const stepStreak=useMemo(()=>{let n=0;for(let i=0;i<365;i++){const d=keyFor(i),count=i===0?steps:Number(read("fit-steps-"+d,0));if(count>=goal)n++;else if(i===0)continue;else break;}return n;},[steps,goal]);
  const badges=[{name:"First 1,000",desc:"Reach 1,000 steps in a day",earned:steps>=1000,icon:Footprints},{name:"Step Goal",desc:"Meet your daily step target",earned:steps>=goal,icon:TargetIcon},{name:"3-day mover",desc:"Meet your step goal three days in a row",earned:stepStreak>=3,icon:Flame},{name:"Workout starter",desc:"Complete your first scheduled workout",earned:completedDays.size>=1,icon:Zap},{name:"Consistency",desc:"Build a 3-day workout streak",earned:workoutStreak>=3,icon:Medal}];
