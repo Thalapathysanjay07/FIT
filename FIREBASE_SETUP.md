@@ -1,25 +1,51 @@
-# Firebase / Firestore setup for FIT
+# FIT Firebase Spark setup
 
-## Project region
-Create the Firestore database in **Mumbai (asia-south1)**. Firestore location cannot be changed after creation.
+## Free-only architecture
 
-## Security
-- The repository's `firestore.rules` denies all direct browser/client reads and writes by default.
-- The intended data path is the FIT Express backend using Firebase Admin SDK.
-- Admin SDK access bypasses Firestore Security Rules. Protect the backend service account as a production secret.
-- Never put service-account JSON, private keys, or Firebase Admin credentials in `VITE_*` variables, frontend source, Git, or screenshots.
+FIT is being migrated to Firebase's **Spark (no-cost) plan**. Do not link a billing account or upgrade to Blaze.
 
-## Backend connection (next setup step)
-Create a Firebase service account in Firebase Console → Project settings → Service accounts → Generate new private key. Store the JSON securely as a backend hosting secret named `FIREBASE_SERVICE_ACCOUNT`; do not send the key in chat or commit it. The backend integration will be enabled only after the server-side Firebase Admin configuration is added and verified.
+- Firebase Authentication: email/password sign-in.
+- Cloud Firestore: user-owned fitness data and app records.
+- Firebase Cloud Messaging: client notification delivery where supported.
+- Firebase Hosting is optional; Netlify can remain the frontend host.
+- No Cloud Functions, paid serverless functions, or automatic payment verification.
 
-## Migration safety
-FIT currently uses PostgreSQL for accounts, user data, payments, memberships, and activity. Creating Firestore does not migrate those records. Keep the existing PostgreSQL database configured until a verified export/import and endpoint cutover are complete. Do not delete the old database during migration.
+Create the Firebase project and choose **Mumbai (asia-south1)** for Firestore before creating the database. Firestore location cannot be changed later.
+
+## Web app configuration
+
+Register a Web app in Firebase Console → Project settings → General → Your apps. Copy its public web configuration into the frontend hosting environment:
+
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_APP_ID`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`
+
+For local development, copy `.env.example` to `.env.local` and fill those values. These are Firebase web-app settings, not privileged credentials. Firebase API keys identify the project; Firestore Security Rules and Authentication must enforce access.
+
+Never put service-account JSON, private keys, or Firebase Admin credentials in `VITE_*` variables, frontend source, Git, or screenshots.
+
+## Spark plan limits and limitations
+
+- Cloud Functions are not available on Spark.
+- Phone/SMS authentication is not a free unlimited option; FIT should use email/password.
+- Do not expose an AI provider API key in browser code. A secure AI proxy needs a trusted backend; without one, keep AI features local/rule-based or disable provider-backed AI.
+- UPI payments can be submitted as pending requests, but client code cannot verify a bank transaction or safely grant Premium. Owner must verify the UTR independently and update the membership using a trusted owner-only process. Never let a user write their own Premium entitlement.
+- FCM clients can receive messages when configured, but securely sending broadcasts/automated notifications requires trusted server infrastructure.
+- Legacy PostgreSQL bcrypt passwords cannot simply be copied into Firebase Authentication. Existing users will need a planned account migration/password reset or a fresh Firebase sign-up.
+
+## Current migration safety
+
+The Express/PostgreSQL backend remains active during the migration. Existing accounts, payment requests, membership records, and some activity routes still depend on PostgreSQL. Do not remove `DATABASE_URL`, Render, or the old database until every route has been migrated and verified.
+
+The repository currently has a Firebase Admin SDK integration for backend-only operations. That integration is separate from the Spark client SDK. A service-account private key is privileged and must never be placed in the browser.
 
 ## Deploy Firestore rules
-From the repository root, after installing Firebase CLI and signing in:
+
+After reviewing the rules for the collections being migrated, deploy from the repository root:
 ```bash
 firebase deploy --only firestore:rules
 ```
 
-## Backend Firebase Admin connection
-The backend now supports Firebase Admin SDK initialization from the server-only `FIREBASE_SERVICE_ACCOUNT` environment variable (the complete service-account JSON string) and optional `FIREBASE_PROJECT_ID`. Add both as private environment variables in Render. Do not commit the JSON key or expose it to Vite. After deploying, test `GET /api/firebase/health`; expected response is `{"status":"connected","projectId":"your-project-id"}`. If not configured, this endpoint returns `503 not_configured`. Existing PostgreSQL routes remain active; Firestore has not replaced PostgreSQL yet.
+Do not deploy permissive test rules. Rules must scope every user-owned document to the authenticated UID and must prevent clients from modifying membership entitlements or admin records.
