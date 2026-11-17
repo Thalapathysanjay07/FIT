@@ -49,14 +49,14 @@ The Express/PostgreSQL backend remains active during the migration. Existing acc
 
 The Firebase-mode frontend uses the Firebase Web SDK directly. The legacy Express backend and its Firebase Admin SDK integration remain in the repository only for backward compatibility; Firebase-mode sign-in, app data, activity, and payment submission do not require that backend. A service-account private key is privileged and must never be placed in the browser.
 
-## Deploy Firestore rules
+## Deploy Firestore rules and indexes
 
-After reviewing the rules for the collections being migrated, deploy from the repository root:
+The repository `firebase.json` configures both `firestore.rules` and `firestore.indexes.json`. After creating the production Firestore database and reviewing the rules, deploy both from the repository root:
 ```bash
-firebase deploy --only firestore:rules
+firebase deploy --only firestore
 ```
 
-Do not deploy permissive test rules. Rules must scope every user-owned document to the authenticated UID and must prevent clients from modifying membership entitlements or admin records.
+This deploy publishes the security rules and the composite index required by the seven-day activity leaderboard. Index creation can take several minutes; wait until the index status is **Enabled** in Firebase Console before testing that query. Do not deploy permissive test rules. Rules must scope every user-owned document to the authenticated UID and must prevent clients from modifying membership entitlements or admin records.
 
 ## Firebase-mode application
 
