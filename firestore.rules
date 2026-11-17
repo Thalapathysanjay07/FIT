@@ -1,9 +1,90 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // FIT currently accesses Firestore through the trusted Express backend.
-    // Firebase Admin SDK bypasses these rules; never expose service credentials
-    // in the browser or commit them to this repository.
+    function signedIn() {
+      return request.auth != null;
+    }
+    function owns(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // Public profile fields only. Admin and premium flags are never client-writable.
+    match /users/{uid} {
+      allow read: if owns(uid);
+      allow create: if owns(uid)
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'email', 'createdAt', 'updatedAt'])
+        && request.resource.data.uid == uid;
+      allow update: if owns(uid)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['name', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    // Per-user app state. The user cannot write another user's document.
+    match /userData/{uid} {
+      allow read: if owns(uid);
+      allow create, update: if owns(uid)
+        && request.resource.data.keys().hasOnly(['uid', 'data', 'updatedAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.data is map
+        && request.resource.data.data.size() <= 100
+        && request.resource.data.data.keys().hasOnly([
+          'fit-done', 'fit-goal', 'fit-level', 'fit-cal', 'fit-pro',
+          'fit-weights', 'fit-ch', 'fit-meals', 'fit-water',
+          'fit-walking', 'fit-workouts', 'fit-streak', 'fit-achievements',
+          'fit-notification-settings', 'fit-profile', 'fit-settings'
+        ]);
+      allow delete: if owns(uid);
+    }
+
+    // Payment requests may be submitted by their owner, but never approved by a client.
+    match /paymentRequests/{requestId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'userId', 'planCode', 'amountPaise', 'utr', 'status', 'createdAt'
+        ])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.planCode == 'quarterly'
+        && request.resource.data.amountPaise == 4900
+        && request.resource.data.utr is string
+        && request.resource.data.utr.size() >= 6
+        && request.resource.data.utr.size() <= 80
+        && request.resource.data.status == 'pending';
+      allow update, delete: if false;
+    }
+
+    // Premium entitlements are read-only to clients. Owner/admin changes happen
+    // only through a trusted privileged process or the Firebase Console.
+    match /memberships/{uid} {
+      allow read: if owns(uid);
+      allow create, update, delete: if false;
+    }
+
+    match /activityDays/{documentId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.steps is int
+        && request.resource.data.steps >= 0
+        && request.resource.data.steps <= 200000;
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['steps', 'stepGoal', 'workouts', 'leaderboardOptIn', 'updatedAt']);
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    match /activityNotifications/{notificationId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
+      allow create, delete: if false;
+    }
+
+    // System metadata, admin data, and every unspecified collection stay private.
     match /{document=**} {
       allow read, write: if false;
     }
