@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Activity, ArrowRight, LockKeyhole, Mail, UserRound } from "lucide-react";
 import { createUserWithEmailAndPassword, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile } from "firebase/auth";
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import App from "./App.jsx";
 import { firebaseAuth, firestoreDb, isFirebaseConfigured } from "./firebase.js";
 
