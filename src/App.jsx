@@ -1,7 +1,7 @@
 import { collection, doc, getDoc, getDocs, query, setDoc, where } from "firebase/firestore";
 import QRCode from "qrcode";
 import { firebaseAuth, firestoreDb } from "./firebase.js";
-import {useEffect,useState} from "react";
+import {useEffect,useRef,useState} from "react";
 import FeatureHub from "./FeatureHub.jsx";
 import {Activity,Apple,BarChart3,CalendarDays,Check,ChevronRight,Crown,Dumbbell,Flame,Footprints,Home,Menu,Plus,Search,Sparkles,Target,Timer,Trophy,TrendingUp,Utensils,Wallet,Users,HeartPulse,X,Zap} from "lucide-react";
 const read=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}};
@@ -57,6 +57,8 @@ useEffect(()=>{
         try{data[key]=JSON.parse(localStorage.getItem(key));}catch{}
       }
     }
+    const serialized=JSON.stringify(data);
+    if(serialized===lastSavedData.current)return;
     try{
       if(firebaseMode){
         if(!firestoreDb)throw new Error("Firestore is not configured.");
@@ -65,16 +67,18 @@ useEffect(()=>{
           data,
           updatedAt:new Date().toISOString()
         });
+        lastSavedData.current=serialized;
       }else{
-        await fetch(`${import.meta.env.VITE_API_URL||""}/api/data`,{
+        const response=await fetch(`${import.meta.env.VITE_API_URL||""}/api/data`,{
           method:"PUT",
           headers:{"Content-Type":"application/json",Authorization:`Bearer ${legacyToken}`},
           body:JSON.stringify({data})
         });
+        if(response.ok)lastSavedData.current=serialized;
       }
     }catch(error){console.warn("FIT data sync failed:",error);}
   };
-  const timer=setInterval(sync,5000);
+  const timer=setInterval(sync,15000);
   sync();
   return()=>clearInterval(timer);
 },[]);
