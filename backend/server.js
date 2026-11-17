@@ -373,14 +373,45 @@ app.post("/api/admin/payments/:id/review", ready, async (req,res) => {
 function validActivityDate(value) {
   return typeof value==="string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value+"T00:00:00Z"));
 }
+// Activity data uses Firestore when configured; PostgreSQL remains a recovery copy.
+function activityDocId(userId,date){return String(userId)+"_"+date;}
+function activityDateRange(days=7){
+  const end=new Date(); end.setUTCHours(0,0,0,0);
+  const start=new Date(end); start.setUTCDate(start.getUTCDate()-(days-1));
+  return {start:start.toISOString().slice(0,10),end:end.toISOString().slice(0,10)};
+}
+async function readActivityFromFirestore(userId,date){
+  const snap=await getFirestoreDb().collection("activityDays").doc(activityDocId(userId,date)).get();
+  if(!snap.exists)return null;
+  const d=snap.data();
+  return {activity_date:d.activityDate,steps:d.steps||0,step_goal:d.stepGoal||8000,workouts:d.workouts||0,leaderboard_opt_in:!!d.leaderboardOptIn};
+}
+async function writeActivityToFirestore(userId,date,patch){
+  const ref=getFirestoreDb().collection("activityDays").doc(activityDocId(userId,date));
+  return getFirestoreDb().runTransaction(async tx=>{
+    const snap=await tx.get(ref); const old=snap.exists?snap.data():{};
+    const next={userId:String(userId),activityDate:date,steps:Math.max(Number(old.steps||0),Number(patch.steps??old.steps??0)),
+      stepGoal:Number(patch.stepGoal??old.stepGoal??8000),workouts:Math.min(20,Number(old.workouts||0)+Number(patch.workoutIncrement||0)),
+      leaderboardOptIn:patch.leaderboardOptIn??old.leaderboardOptIn??false,updatedAt:new Date().toISOString()};
+    tx.set(ref,next,{merge:false}); return next;
+  });
+}
+async function createActivityNotification(userId,kind,title,body){
+  const ref=getFirestoreDb().collection("activityNotifications").doc();
+  await ref.set({legacyId:ref.id,userId:String(userId),kind,title,body,createdAt:new Date().toISOString(),readAt:null});
+}
 app.get("/api/activity/today", ready, auth, async (req,res) => {
   try {
     const date=String(req.query.date||new Date().toISOString().slice(0,10));
     if(!validActivityDate(date))return res.status(400).json({error:"Invalid activity date."});
+    if(getFirebaseStatus().configured){
+      const activity=await readActivityFromFirestore(req.user.sub,date);
+      if(activity){res.set("Cache-Control","no-store");return res.json({activity,source:"firestore"});}
+    }
     const result=await pool.query("SELECT activity_date,steps,step_goal,workouts FROM activity_days WHERE user_id=$1 AND activity_date=$2",[req.user.sub,date]);
     res.set("Cache-Control","no-store");
-    res.json({activity:result.rows[0]||{activity_date:date,steps:0,step_goal:8000,workouts:0}});
-  } catch(error){console.error("Activity read failed:",error.message);res.status(500).json({error:"Could not load activity."});}
+    res.json({activity:result.rows[0]||{activity_date:date,steps:0,step_goal:8000,workouts:0},source:"postgresql"});
+  } catch(error){console.error("Activity read failed:",error.message);res.status(503).json({error:"Could not load activity."});}
 });
 app.put("/api/activity/today", ready, auth, async (req,res) => {
   const date=String(req.body?.date||new Date().toISOString().slice(0,10));
@@ -392,13 +423,19 @@ app.put("/api/activity/today", ready, auth, async (req,res) => {
       VALUES($1,$2,$3,$4) ON CONFLICT(user_id,activity_date) DO UPDATE SET
       steps=GREATEST(activity_days.steps,EXCLUDED.steps),step_goal=EXCLUDED.step_goal,updated_at=NOW()
       RETURNING activity_date,steps,step_goal,workouts`,[req.user.sub,date,steps,goal]);
+    let firestoreSynced=false;
+    if(getFirebaseStatus().configured){
+      const next=await writeActivityToFirestore(req.user.sub,date,{steps,stepGoal:goal});
+      firestoreSynced=true;
+      if(next.steps>=next.stepGoal) await createActivityNotification(req.user.sub,"step_goal","Daily step goal reached","You reached your step goal. Great consistency!");
+    }
     const row=result.rows[0];
     if(row.steps>=row.step_goal){
       const already=await pool.query("SELECT 1 FROM activity_notifications WHERE user_id=$1 AND kind='step_goal' AND created_at::date=$2 LIMIT 1",[req.user.sub,date]);
-      if(!already.rowCount)await pool.query("INSERT INTO activity_notifications(user_id,kind,title,body) VALUES($1,'step_goal','Daily step goal reached','You reached your step goal. Great consistency!')",[req.user.sub]);
+      if(!already.rowCount)await pool.query("INSERT INTO activity_notifications(user_id,kind,title,body) VALUES($1,'step_goal','Daily step goal reached','You reached your step goal. Great consistency!')",[req.user.sub,date]);
     }
-    res.json({activity:row});
-  }catch(error){console.error("Activity save failed:",error.message);res.status(500).json({error:"Could not save activity."});}
+    res.json({activity:row,firestoreSynced});
+  }catch(error){console.error("Activity save failed:",error.message);res.status(503).json({error:"Could not save activity safely."});}
 });
 app.post("/api/activity/workout", ready, auth, async (req,res) => {
   const date=String(req.body?.date||new Date().toISOString().slice(0,10));
@@ -408,10 +445,13 @@ app.post("/api/activity/workout", ready, auth, async (req,res) => {
       VALUES($1,$2,1) ON CONFLICT(user_id,activity_date) DO UPDATE SET
       workouts=LEAST(activity_days.workouts+1,20),updated_at=NOW()
       RETURNING workouts`,[req.user.sub,date]);
-    const count=result.rows[0].workouts;
     await pool.query("INSERT INTO activity_notifications(user_id,kind,title,body) VALUES($1,'workout','Workout logged','Your workout has been added to today’s activity.')",[req.user.sub]);
-    res.status(201).json({workouts:count});
-  }catch(error){console.error("Workout log failed:",error.message);res.status(500).json({error:"Could not log workout."});}
+    if(getFirebaseStatus().configured){
+      await writeActivityToFirestore(req.user.sub,date,{workoutIncrement:1});
+      await createActivityNotification(req.user.sub,"workout","Workout logged","Your workout has been added to today’s activity.");
+    }
+    res.status(201).json({workouts:result.rows[0].workouts,firestoreSynced:getFirebaseStatus().configured});
+  }catch(error){console.error("Workout log failed:",error.message);res.status(503).json({error:"Could not log workout safely."});}
 });
 app.put("/api/activity/leaderboard-opt-in", ready, auth, async (req,res) => {
   const enabled=req.body?.enabled;
@@ -421,36 +461,65 @@ app.put("/api/activity/leaderboard-opt-in", ready, auth, async (req,res) => {
       VALUES($1,CURRENT_DATE,$2) ON CONFLICT(user_id,activity_date)
       DO UPDATE SET leaderboard_opt_in=EXCLUDED.leaderboard_opt_in,updated_at=NOW()`,[req.user.sub,enabled]);
     await pool.query("UPDATE activity_days SET leaderboard_opt_in=$2 WHERE user_id=$1",[req.user.sub,enabled]);
-    res.json({leaderboardOptIn:enabled});
-  }catch(error){console.error("Leaderboard preference failed:",error.message);res.status(500).json({error:"Could not update leaderboard preference."});}
+    if(getFirebaseStatus().configured){
+      const {start,end}=activityDateRange(7);
+      const dates=await pool.query("SELECT activity_date,steps,step_goal,workouts FROM activity_days WHERE user_id=$1 AND activity_date BETWEEN $2 AND $3",[req.user.sub,start,end]);
+      for(const row of dates.rows) await writeActivityToFirestore(req.user.sub,String(row.activity_date).slice(0,10),{steps:row.steps,stepGoal:row.step_goal,leaderboardOptIn:enabled});
+      await writeActivityToFirestore(req.user.sub,new Date().toISOString().slice(0,10),{leaderboardOptIn:enabled});
+    }
+    res.json({leaderboardOptIn:enabled,firestoreSynced:getFirebaseStatus().configured});
+  }catch(error){console.error("Leaderboard preference failed:",error.message);res.status(503).json({error:"Could not update leaderboard preference."});}
 });
 app.get("/api/activity/leaderboard", ready, auth, async (req,res) => {
   try{
-    const result=await pool.query(`SELECT u.name, SUM(a.steps)::int AS steps, SUM(a.workouts)::int AS workouts
-      FROM activity_days a JOIN users u ON u.id=a.user_id
-      WHERE a.activity_date>=CURRENT_DATE-6 AND a.activity_date<=CURRENT_DATE
-      GROUP BY a.user_id,u.name
-      HAVING BOOL_OR(a.leaderboard_opt_in)=TRUE
-      ORDER BY steps DESC,workouts DESC LIMIT 20`);
-    res.set("Cache-Control","no-store");
-    res.json({leaderboard:result.rows});
-  }catch(error){console.error("Leaderboard load failed:",error.message);res.status(500).json({error:"Could not load leaderboard."});}
+    let leaderboard=[];
+    if(getFirebaseStatus().configured){
+      const {start,end}=activityDateRange(7);
+      const snap=await getFirestoreDb().collection("activityDays").where("activityDate",">=",start).where("activityDate","<=",end).get();
+      const totals=new Map();
+      for(const doc of snap.docs){const d=doc.data();if(!d.leaderboardOptIn)continue;const old=totals.get(d.userId)||{userId:d.userId,steps:0,workouts:0};old.steps+=Number(d.steps||0);old.workouts+=Number(d.workouts||0);totals.set(d.userId,old);}
+      const ranked=[...totals.values()].sort((a,b)=>b.steps-a.steps||b.workouts-a.workouts).slice(0,20);
+      leaderboard=await Promise.all(ranked.map(async item=>{const user=await getFirestoreDb().collection("users").doc(String(item.userId)).get();return {name:user.exists?user.data().name:"FIT member",steps:item.steps,workouts:item.workouts};}));
+    } else {
+      const result=await pool.query(`SELECT u.name, SUM(a.steps)::int AS steps, SUM(a.workouts)::int AS workouts
+        FROM activity_days a JOIN users u ON u.id=a.user_id
+        WHERE a.activity_date>=CURRENT_DATE-6 AND a.activity_date<=CURRENT_DATE
+        GROUP BY a.user_id,u.name HAVING BOOL_OR(a.leaderboard_opt_in)=TRUE
+        ORDER BY steps DESC,workouts DESC LIMIT 20`);
+      leaderboard=result.rows;
+    }
+    res.set("Cache-Control","no-store");res.json({leaderboard,source:getFirebaseStatus().configured?"firestore":"postgresql"});
+  }catch(error){console.error("Leaderboard load failed:",error.message);res.status(503).json({error:"Could not load leaderboard."});}
 });
 app.get("/api/activity/notifications", ready, auth, async (req,res) => {
   try{
-    const result=await pool.query("SELECT id,kind,title,body,created_at,read_at FROM activity_notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 30",[req.user.sub]);
-    res.set("Cache-Control","no-store");
-    res.json({notifications:result.rows});
-  }catch(error){console.error("Notifications load failed:",error.message);res.status(500).json({error:"Could not load notifications."});}
+    let notifications=[];
+    if(getFirebaseStatus().configured){
+      const snap=await getFirestoreDb().collection("activityNotifications").where("userId","==",String(req.user.sub)).limit(100).get();
+      notifications=snap.docs.map(doc=>({id:doc.id,...doc.data()})).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))).slice(0,30);
+    } else {
+      const result=await pool.query("SELECT id,kind,title,body,created_at,read_at FROM activity_notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 30",[req.user.sub]);
+      notifications=result.rows;
+    }
+    res.set("Cache-Control","no-store");res.json({notifications,source:getFirebaseStatus().configured?"firestore":"postgresql"});
+  }catch(error){console.error("Notifications load failed:",error.message);res.status(503).json({error:"Could not load notifications."});}
 });
 app.post("/api/activity/notifications/:id/read", ready, auth, async (req,res) => {
-  const id=Number(req.params.id);
-  if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({error:"Invalid notification."});
+  const id=String(req.params.id);
   try{
-    const result=await pool.query("UPDATE activity_notifications SET read_at=NOW() WHERE id=$1 AND user_id=$2 RETURNING id",[id,req.user.sub]);
+    if(getFirebaseStatus().configured){
+      const ref=getFirestoreDb().collection("activityNotifications").doc(id);
+      const snap=await ref.get();
+      if(!snap.exists||snap.data().userId!==String(req.user.sub))return res.status(404).json({error:"Notification not found."});
+      await ref.update({readAt:new Date().toISOString()});
+      return res.json({read:true,firestoreSynced:true});
+    }
+    const numericId=Number(id);
+    if(!Number.isSafeInteger(numericId)||numericId<1)return res.status(400).json({error:"Invalid notification."});
+    const result=await pool.query("UPDATE activity_notifications SET read_at=NOW() WHERE id=$1 AND user_id=$2 RETURNING id",[numericId,req.user.sub]);
     if(!result.rowCount)return res.status(404).json({error:"Notification not found."});
     res.json({read:true});
-  }catch(error){console.error("Notification update failed:",error.message);res.status(500).json({error:"Could not update notification."});}
+  }catch(error){console.error("Notification update failed:",error.message);res.status(503).json({error:"Could not update notification."});}
 });
 
 app.get("/api/data", ready, auth, async (req,res) => {
