@@ -100,7 +100,7 @@ async function ask(e){
     const response=await fetch(`${import.meta.env.VITE_API_URL||""}/api/coach`,{
       method:"POST",
       headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},
-      body:JSON.stringify({mode:coachMode,question:(question.slice(0,600)+"\n\nFIT context: "+JSON.stringify({goal,level,profile:read("fit-profile",{}),meals:meals.slice(-7).map(m=>({name:m.name,cal:m.cal,protein:m.protein})),calorieTarget:calTarget,proteinTarget:proTarget,water,steps:read("fit-steps-"+dayKey(),0),weights:weights.slice(-7).map(w=>w.kg),workouts:done,weeklyNutrition,weeklyAverage,targetEstimate})).slice(0,1190)})
+      body:JSON.stringify({mode:coachMode,question:(question.slice(0,350)+"\n\nFIT context: "+JSON.stringify({goal,level,age:profile.age,heightCm:profile.heightCm,weightKg:profile.weightKg,dietPreference:profile.dietPreference,calorieTarget:targetEstimate?.calories||calTarget,proteinTarget:targetEstimate?.protein||proTarget,water,steps:read("fit-steps-"+dayKey(),0),weekly:weeklyNutrition.map(d=>[d.date,d.calories,d.protein,d.steps,d.meals]),weeklyAverage}))})
     });
     const data=await response.json().catch(()=>({}));
     if(!response.ok)throw new Error(data.error||"FIT Coach is unavailable right now.");
