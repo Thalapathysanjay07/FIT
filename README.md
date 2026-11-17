@@ -36,7 +36,13 @@ The endpoint requires a signed-in user, limits questions to 1,200 characters, ap
 
 ### Membership and payments
 
-FIT Pro pricing is ₹49 per month and ₹499 per year. UPI payment requests are submitted with a transaction reference and require manual admin verification before membership activation. Configure FIT_UPI_ID, FIT_MERCHANT_NAME and FIT_ADMIN_KEY on the backend. QR image display is not yet implemented; do not claim automatic payment verification.
+FIT Pro pricing is ₹49 per month and ₹499 per year. The membership page generates a dynamic UPI QR code and also opens a UPI payment intent. Users submit the UTR; an owner manually verifies it in the Admin page before activation. The backend validates active subscription dates on every Premium AI request. Re-approving an existing active membership extends from its current expiry instead of discarding remaining days.
+
+Configure FIT_UPI_ID, FIT_MERCHANT_NAME and a private FIT_ADMIN_KEY (at least 24 characters) on the backend. QR generation requires a valid merchant UPI ID. UTR submission is not automatic bank verification; the owner must verify the payment in the merchant's bank/UPI app before approval. Never share the admin key with customers.
+
+### Premium access and AI
+
+Free accounts can use general FIT Coach chat and standard tracking. FIT Pro is required server-side for personalised AI diet plans, goal-based AI workout plans and AI weekly reports. The backend requires OPENAI_API_KEY; AI_MODEL and AI_BASE_URL are optional. AI-generated nutrition and training suggestions are educational estimates, not medical advice.
 
 ## Deployment
 
@@ -79,8 +85,8 @@ The GitHub Actions workflow **FIT Android APK** builds a debug APK and uploads i
 - Responsive layouts and installable PWA
 - Android Capacitor build pipeline
 
-## Not yet production-enabled
+## Remaining launch requirements
 
-The FIT Coach requires a configured AI provider key. Membership checkout and payments are currently disabled by design and will be added later. An owner-operated admin review workflow, subscription entitlement enforcement across all premium features, ad network, trainer marketplace and payouts, push notifications, live health-device integrations, and app-store release signing still require additional implementation, review and secrets. Workout suggestions are general educational content, not individualized medical advice.
+The app includes manual UPI QR/intent checkout and owner-operated payment review, but does not automatically verify bank transactions. AI features require a configured provider key and can incur usage costs. The Android workflow creates a debug APK only; Play Store release signing, store listing assets and release compliance are not included. Push notifications, trainer marketplace/payouts, and ad network are not implemented. Health Connect and phone step sensors require testing on supported physical devices; web preview cannot provide native sensor access. Privacy policy and terms are starter templates and must be completed with the operator's legal identity, contact details, actual providers and applicable law before public launch.
 
 Before public launch, complete privacy policy/terms, account deletion and data export workflows, security review, database backups, monitoring, app-store assets and legal/payment compliance.
