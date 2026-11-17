@@ -48,7 +48,6 @@ export default function FirebaseAuthGate() {
           }
           const dataSnap = await getDoc(doc(firestoreDb, "userData", nextUser.uid));
           hydrateFitnessData(dataSnap.exists() ? dataSnap.data().data : {});
-          localStorage.setItem("fit-token", await nextUser.getIdToken());
         } else {
           localStorage.removeItem("fit-token");
         }
