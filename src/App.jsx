@@ -122,12 +122,12 @@ useEffect(()=>{
 async function submitUpiReference(e){
   e.preventDefault();SPaymentError("");SPaymentMessage("");
   if(!utr.trim()){SPaymentError("Enter the UPI transaction reference/UTR.");return;}
-  if(!/^[A-Za-z0-9-]{8,80}$/.test(utr.trim().replace(/\\s/g,""))){SPaymentError("Enter a valid UTR (8–80 letters or numbers).");return;}
+  if(!/^[A-Za-z0-9-]{8,80}$/.test(utr.trim().replace(/\s/g,""))){SPaymentError("Enter a valid UTR (8–80 letters or numbers).");return;}
   SPaymentBusy(true);
   try{
     if(import.meta.env.VITE_USE_FIREBASE_AUTH==="true"){
       const currentUser=firebaseAuth?.currentUser;if(!currentUser||!firestoreDb)throw new Error("Please sign in to Firebase again.");
-      const cleanUtr=utr.trim().replace(/\\s/g,"");
+      const cleanUtr=utr.trim().replace(/\s/g,"");
       await setDoc(doc(firestoreDb,"paymentRequests",cleanUtr),{userId:currentUser.uid,planCode:"quarterly",amountPaise:4900,utr:cleanUtr,status:"pending",createdAt:new Date().toISOString()});
       SPaymentMessage("Payment reference submitted. FIT Pro activates only after the owner verifies the payment.");SUTR("");
       const history=await getDocs(query(collection(firestoreDb,"paymentRequests"),where("userId","==",currentUser.uid)));
