@@ -2,7 +2,7 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { initializeTestEnvironment, assertSucceeds, assertFails } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { deleteDoc, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 
 const projectId = "fit-rules-test";
 let env;
@@ -131,6 +131,23 @@ describe("FIT Firestore security rules", () => {
       userId: "user-a", planCode: "monthly", amountPaise: 4900,
       utr: "123456789012", status: "approved", createdAt: "now"
     }));
+  });
+
+
+  it("allows account owners to delete only their own fitness data", async () => {
+    await env.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), "userData/user-a"), {
+        uid: "user-a", data: { "fit-goal": "Muscle gain" }, updatedAt: "now"
+      });
+      await setDoc(doc(ctx.firestore(), "userData/user-b"), {
+        uid: "user-b", data: { "fit-goal": "Weight loss" }, updatedAt: "now"
+      });
+    });
+    const ownerDb = env.authenticatedContext("user-a").firestore();
+    const otherDb = env.authenticatedContext("user-b").firestore();
+    await assertSucceeds(deleteDoc(doc(ownerDb, "userData/user-a")));
+    await assertFails(deleteDoc(doc(ownerDb, "userData/user-b")));
+    await assertSucceeds(getDoc(doc(otherDb, "userData/user-b")));
   });
 
   it("allows only bounded activity values owned by the signed-in user", async () => {
