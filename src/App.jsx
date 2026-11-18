@@ -117,10 +117,12 @@ useEffect(()=>{
           const uri="upi://pay?"+new URLSearchParams({pa:upiId,pn:merchantName,am:plan.amount,cu:"INR",tn:plan.name}).toString();
           SQrData(await QRCode.toDataURL(uri,{errorCorrectionLevel:"M",margin:2,width:280}));
         }
+        if(!active)return;
         const [memberSnap,paymentSnap]=await Promise.all([
           getDoc(doc(firestoreDb,"memberships",currentUser.uid)),
           getDocs(query(collection(firestoreDb,"paymentRequests"),where("userId","==",currentUser.uid)))
         ]);
+        if(!active)return;
         const member=memberSnap.exists()?memberSnap.data():null;
         const activeMember=member&&Date.parse(member.expiresAt)>Date.now()&&Date.parse(member.startsAt)<=Date.now();
         SMembership(activeMember?{...member,expires_at:member.expiresAt,starts_at:member.startsAt}:null);
