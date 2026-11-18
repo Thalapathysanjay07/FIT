@@ -33,7 +33,9 @@ export default function FirebaseAuthGate() {
       setChecking(false);
       return undefined;
     }
+    let authEvent = 0;
     return onAuthStateChanged(firebaseAuth, async (nextUser) => {
+      const eventId = ++authEvent;
       try {
         if (nextUser && !nextUser.emailVerified) {
           setVerificationEmail(nextUser.email || "");
@@ -45,6 +47,7 @@ export default function FirebaseAuthGate() {
           setVerificationEmail("");
           const profileRef = doc(firestoreDb, "users", nextUser.uid);
           const profileSnap = await getDoc(profileRef);
+          if (eventId !== authEvent) return;
           if (!profileSnap.exists()) {
             await setDoc(profileRef, {
               uid: nextUser.uid,
@@ -54,17 +57,20 @@ export default function FirebaseAuthGate() {
               updatedAt: new Date().toISOString()
             });
           }
+          if (eventId !== authEvent) return;
           const dataSnap = await getDoc(doc(firestoreDb, "userData", nextUser.uid));
+          if (eventId !== authEvent) return;
           hydrateFitnessData(dataSnap.exists() ? dataSnap.data().data : {});
         } else {
           localStorage.removeItem("fit-token");
         }
+        if (eventId !== authEvent) return;
         setUser(nextUser);
         setError("");
       } catch (e) {
-        setError(e.message || "Could not load your Firebase account.");
+        if (eventId === authEvent) setError(e.message || "Could not load your Firebase account.");
       } finally {
-        setChecking(false);
+        if (eventId === authEvent) setChecking(false);
       }
     });
   }, []);
