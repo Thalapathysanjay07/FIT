@@ -1,4 +1,5 @@
 name: Deploy FIT to Firebase Hosting
+# Rebuild after refreshing Firebase web configuration secrets
 
 on:
   push:
