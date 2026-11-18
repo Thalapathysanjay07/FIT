@@ -148,12 +148,27 @@ export default function FirebaseAuthGate() {
 
   async function resetPassword() {
     setError(""); setNotice("");
-    if (!email.trim()) { setError("Enter your email address first."); return; }
+    const address = email.trim();
+    if (!address) { setError("Enter your email address first."); return; }
+    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(address)) {
+      setError("Enter a valid email address.");
+      return;
+    }
+    if (!isFirebaseConfigured || !firebaseAuth) {
+      setError("Password recovery is unavailable because Firebase is not configured.");
+      return;
+    }
     try {
-      await sendPasswordResetEmail(firebaseAuth, email.trim());
-      setNotice("Password reset email sent. Check your inbox.");
+      await sendPasswordResetEmail(firebaseAuth, address);
+      // Keep the message neutral so the screen does not reveal whether an account exists.
+      setNotice("If an account uses this email, a password reset link has been sent. Check your inbox and spam folder.");
     } catch (e) {
-      setError(e.message || "Could not send password reset email.");
+      const messages = {
+        "auth/invalid-email": "Enter a valid email address.",
+        "auth/too-many-requests": "Too many reset attempts. Please wait before trying again.",
+        "auth/network-request-failed": "Network error. Check your connection and try again."
+      };
+      setError(messages[e.code] || "Could not send the reset email. Please try again.");
     }
   }
 
