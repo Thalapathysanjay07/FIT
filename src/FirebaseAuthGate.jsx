@@ -150,7 +150,7 @@ export default function FirebaseAuthGate() {
     setError(""); setNotice("");
     const address = email.trim();
     if (!address) { setError("Enter your email address first."); return; }
-    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(address)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
       setError("Enter a valid email address.");
       return;
     }
