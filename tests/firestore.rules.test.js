@@ -44,6 +44,27 @@ describe("FIT Firestore security rules", () => {
     await assertFails(getDoc(doc(otherUserDb, "activityDays/user-a_2026-11-17")));
   });
 
+  it("allows leaderboard reads only for opted-in activity rows", async () => {
+    await env.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), "activityDays/user-a_2026-11-17"), {
+        userId: "user-a", activityDate: "2026-11-17", steps: 5000,
+        stepGoal: 8000, workouts: 1, leaderboardOptIn: true,
+        displayName: "FIT Member", updatedAt: "now"
+      });
+    });
+    const otherUserDb = env.authenticatedContext("user-b").firestore();
+    await assertSucceeds(getDoc(doc(otherUserDb, "activityDays/user-a_2026-11-17")));
+  });
+
+  it("allows owners to create a workout activity notification", async () => {
+    const db = env.authenticatedContext("user-a").firestore();
+    await assertSucceeds(setDoc(doc(db, "activityNotifications/user-a_workout_session"), {
+      userId: "user-a", kind: "workout", title: "Workout logged",
+      body: "Your workout has been added to today’s activity.",
+      createdAt: "now", readAt: null
+    }));
+  });
+
   it("does not allow clients to create privileged notification types", async () => {
     const db = env.authenticatedContext("user-a").firestore();
     await assertFails(setDoc(doc(db, "activityNotifications/notice-1"), {
@@ -55,7 +76,7 @@ describe("FIT Firestore security rules", () => {
   it("rejects client-created or modified premium memberships", async () => {
     const db = env.authenticatedContext("user-a").firestore();
     await assertFails(setDoc(doc(db, "memberships/user-a"), {
-      userId: "user-a", planCode: "quarterly", startsAt: "now", expiresAt: "later"
+      userId: "user-a", planCode: "monthly", startsAt: "now", expiresAt: "later"
     }));
   });
 
@@ -79,11 +100,11 @@ describe("FIT Firestore security rules", () => {
   it("does not let a client change payment approval status", async () => {
     await env.withSecurityRulesDisabled(async ctx => {
       await setDoc(doc(ctx.firestore(), "paymentRequests/123456789012"), {
-        userId: "user-a", planCode: "quarterly", amountPaise: 4900, utr: "123456789012", status: "pending", createdAt: "now"
+        userId: "user-a", planCode: "monthly", amountPaise: 4900, utr: "123456789012", status: "pending", createdAt: "now"
       });
     });
     await assertFails(setDoc(doc(env.authenticatedContext("user-a").firestore(), "paymentRequests/123456789012"), {
-      userId: "user-a", planCode: "quarterly", amountPaise: 4900, utr: "123456789012", status: "approved", createdAt: "now"
+      userId: "user-a", planCode: "monthly", amountPaise: 4900, utr: "123456789012", status: "approved", createdAt: "now"
     }));
   });
 });
