@@ -311,7 +311,7 @@ export default function FirebaseAuthGate() {
   if (checking) return <div className="auth-loading"><Activity/> FIT</div>;
   if (user) {
     const profile = { id: user.uid, uid: user.uid, name: user.displayName || "FIT Member", email: user.email };
-    return <><div className="account-strip"><span>Signed in as <b>{profile.name}</b></span><button onClick={logout}>Sign out</button><button onClick={deleteAccount} disabled={busy}>Delete account</button></div><App user={profile} onSignOut={logout}/></>;
+    return <><div className="account-strip"><span>Signed in as <b>{profile.name}</b></span><button onClick={logout}>Sign out</button><button onClick={deleteAccount} disabled={busy}>Delete account</button></div><App key={user.uid} user={profile} onSignOut={logout}/></>;
   }
 
   if (verificationEmail && firebaseAuth?.currentUser && !firebaseAuth.currentUser.emailVerified) return <main className="auth-screen"><section className="auth-card"><div className="auth-brand"><span><Activity size={25}/></span> FIT<span className="auth-green">.</span></div><div className="auth-kicker">EMAIL VERIFICATION</div><h1>Verify your email.</h1><p>We sent a verification link to <b>{verificationEmail}</b>. Verify it before accessing your FIT account.</p>{error && <div className="auth-error">{error}</div>}{notice && <div className="auth-foot">{notice}</div>}<button className="auth-submit" disabled={busy} onClick={refreshEmailVerification}>{busy?"Checking…":"I've verified my email"}</button><button type="button" className="auth-switch" disabled={busy} onClick={resendVerification}>Resend verification email</button><button type="button" className="auth-switch" disabled={busy} onClick={logout}>Sign out</button></section></main>;
