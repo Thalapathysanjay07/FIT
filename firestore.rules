@@ -39,8 +39,10 @@ service cloud.firestore {
           'userId', 'planCode', 'amountPaise', 'utr', 'status', 'createdAt'
         ])
         && request.resource.data.userId == request.auth.uid
-        && request.resource.data.planCode == 'quarterly'
-        && request.resource.data.amountPaise == 4900
+        && (
+          (request.resource.data.planCode == 'monthly' && request.resource.data.amountPaise == 4900)
+          || (request.resource.data.planCode == 'yearly' && request.resource.data.amountPaise == 49900)
+        )
         && request.resource.data.utr is string
         && request.resource.data.utr.size() >= 6
         && request.resource.data.utr.size() <= 80
