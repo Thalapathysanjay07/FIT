@@ -84,9 +84,21 @@ useEffect(()=>{
       }
     }catch(error){setSyncStatus("error");console.warn("FIT data sync failed:",error);}
   };
+  const handleOnline=()=>{sync();};
+  const handleOffline=()=>setSyncStatus("offline");
+  const handleVisible=()=>{if(document.visibilityState==="visible"&&navigator.onLine)sync();};
   const timer=setInterval(sync,15000);
+  window.addEventListener("online",handleOnline);
+  window.addEventListener("offline",handleOffline);
+  document.addEventListener("visibilitychange",handleVisible);
+  if(!navigator.onLine)setSyncStatus("offline");
   sync();
-  return()=>clearInterval(timer);
+  return()=>{
+    clearInterval(timer);
+    window.removeEventListener("online",handleOnline);
+    window.removeEventListener("offline",handleOffline);
+    document.removeEventListener("visibilitychange",handleVisible);
+  };
 },[]);
 useEffect(()=>{
   if(page!=="Membership")return;
