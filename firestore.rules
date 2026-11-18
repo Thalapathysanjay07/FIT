@@ -44,8 +44,94 @@ service cloud.firestore {
           || (request.resource.data.planCode == 'yearly' && request.resource.data.amountPaise == 49900)
         )
         && request.resource.data.utr is string
-        && request.resource.data.utr.size() >= 6
+        && request.resource.data.utr.size() >= 8
         && request.resource.data.utr.size() <= 80
+        && request.resource.data.utr.matches('^[A-Za-z0-9-]+
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // Premium entitlements are read-only to clients. Owner/admin changes happen
+    // only through a trusted privileged process or the Firebase Console.
+    match /memberships/{uid} {
+      allow read: if owns(uid);
+      allow create, update: if false;
+      allow delete: if owns(uid);
+    }
+
+    match /activityDays/{documentId} {
+      // Only explicitly opted-in rows are visible to leaderboard readers.
+      allow read: if signedIn()
+        && (resource.data.userId == request.auth.uid || resource.data.leaderboardOptIn == true);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'userId', 'activityDate', 'steps', 'stepGoal', 'workouts',
+          'leaderboardOptIn', 'displayName', 'updatedAt'
+        ])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.activityDate is string
+        && request.resource.data.activityDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.steps is int
+        && request.resource.data.steps >= 0
+        && request.resource.data.steps <= 200000
+        && request.resource.data.stepGoal is int
+        && request.resource.data.stepGoal >= 1000
+        && request.resource.data.stepGoal <= 50000
+        && request.resource.data.workouts is int
+        && request.resource.data.workouts >= 0
+        && request.resource.data.workouts <= 20
+        && request.resource.data.leaderboardOptIn is bool
+        && request.resource.data.updatedAt is string
+        && (!('displayName' in request.resource.data)
+          || (request.resource.data.displayName is string
+            && request.resource.data.displayName.size() <= 80));
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['steps', 'stepGoal', 'workouts', 'leaderboardOptIn', 'displayName', 'updatedAt'])
+        && request.resource.data.steps is int
+        && request.resource.data.steps >= 0
+        && request.resource.data.steps <= 200000
+        && request.resource.data.stepGoal is int
+        && request.resource.data.stepGoal >= 1000
+        && request.resource.data.stepGoal <= 50000
+        && request.resource.data.workouts is int
+        && request.resource.data.workouts >= 0
+        && request.resource.data.workouts <= 20
+        && request.resource.data.leaderboardOptIn is bool
+        && request.resource.data.updatedAt is string
+        && (!('displayName' in request.resource.data)
+          || (request.resource.data.displayName is string
+            && request.resource.data.displayName.size() <= 80));
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+    match /activityNotifications/{notificationId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt'])
+        && (request.resource.data.readAt == null || request.resource.data.readAt is string);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['userId', 'kind', 'title', 'body', 'createdAt', 'readAt'])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.kind in ['step_goal', 'workout']
+        && request.resource.data.title is string
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.body is string
+        && request.resource.data.body.size() <= 300
+        && request.resource.data.createdAt is string
+        && request.resource.data.readAt == null;
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // System metadata, admin data, and every unspecified collection stay private.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+})
+        && request.resource.data.createdAt is string
         && requestId == request.resource.data.utr
         && request.resource.data.status == 'pending';
       allow update: if false;
