@@ -122,12 +122,17 @@ export default function FirebaseAuthGate() {
       provider.setCustomParameters({ prompt: "select_account" });
       const credential = await signInWithPopup(firebaseAuth, provider);
       const googleUser = credential.user;
-      await setDoc(doc(firestoreDb, "users", googleUser.uid), {
+      const profileRef = doc(firestoreDb, "users", googleUser.uid);
+      const existingProfile = await getDoc(profileRef);
+      await setDoc(profileRef, {
         uid: googleUser.uid,
         name: googleUser.displayName || "FIT Member",
         email: googleUser.email || "",
         photoURL: googleUser.photoURL || "",
         provider: "google",
+        createdAt: existingProfile.exists()
+          ? existingProfile.data().createdAt || new Date().toISOString()
+          : new Date().toISOString(),
         updatedAt: new Date().toISOString()
       }, { merge: true });
     } catch (e) {
