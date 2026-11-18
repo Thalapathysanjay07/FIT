@@ -207,7 +207,6 @@ export default function FeatureHub({page,onToast,onSignOut,user,goal,level,onGoa
  const toggleSession=async(day)=>{
   const key=todayKey()+"-"+day;const wasDone=!!completed[key];
   setCompleted(v=>({...v,[key]:!v[key]}));
-  onToast?.(wasDone?"Workout marked incomplete":"Workout completed");
   try{
    if(import.meta.env.VITE_USE_FIREBASE_AUTH==="true"){
     const user=firebaseAuth?.currentUser;if(!user||!firestoreDb)throw new Error("Please sign in to Firebase again.");
@@ -221,7 +220,11 @@ export default function FeatureHub({page,onToast,onSignOut,user,goal,level,onGoa
     const response=await fetch(`${import.meta.env.VITE_API_URL||""}/api/activity/workout`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${localStorage.getItem("fit-token")}`},body:JSON.stringify({date:todayKey()})});
     if(!response.ok){const data=await response.json().catch(()=>({}));throw new Error(data.error||"Workout saved locally; server sync is unavailable.");}
    }
-  }catch(error){onToast?.(error.message||"Workout saved locally; sync unavailable.");}
+   onToast?.(wasDone?"Workout marked incomplete":"Workout completed");
+  }catch(error){
+   setCompleted(v=>({...v,[key]:wasDone}));
+   onToast?.(error.message||"Workout could not be synced. Your previous completion state was restored.");
+  }
  };
  const exportData=async()=>{try{
   const localData=Object.fromEntries(Object.keys(localStorage).filter(k=>k.startsWith("fit-")&&k!=="fit-token").map(k=>[k,read(k,null)]));
