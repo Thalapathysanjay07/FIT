@@ -24,6 +24,34 @@ describe("FIT Firestore security rules", () => {
     await assertFails(getDoc(doc(env.authenticatedContext("user-b").firestore(), "userData/user-a")));
   });
 
+  it("prevents users from assigning themselves admin or premium profile flags", async () => {
+    const db = env.authenticatedContext("user-a").firestore();
+    await assertFails(setDoc(doc(db, "users/user-a"), {
+      uid: "user-a", name: "FIT Member", email: "user@example.com",
+      role: "admin", isPremium: true, createdAt: "now", updatedAt: "now"
+    }));
+  });
+
+  it("keeps leaderboard activity hidden unless the owner opts in", async () => {
+    await env.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), "activityDays/user-a_2026-11-17"), {
+        userId: "user-a", activityDate: "2026-11-17", steps: 5000,
+        stepGoal: 8000, workouts: 1, leaderboardOptIn: false,
+        displayName: "FIT Member", updatedAt: "now"
+      });
+    });
+    const otherUserDb = env.authenticatedContext("user-b").firestore();
+    await assertFails(getDoc(doc(otherUserDb, "activityDays/user-a_2026-11-17")));
+  });
+
+  it("does not allow clients to create privileged notification types", async () => {
+    const db = env.authenticatedContext("user-a").firestore();
+    await assertFails(setDoc(doc(db, "activityNotifications/notice-1"), {
+      userId: "user-a", kind: "payment_approved", title: "Premium granted",
+      body: "Your membership is active", createdAt: "now", readAt: null
+    }));
+  });
+
   it("rejects client-created or modified premium memberships", async () => {
     const db = env.authenticatedContext("user-a").firestore();
     await assertFails(setDoc(doc(db, "memberships/user-a"), {
