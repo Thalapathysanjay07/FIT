@@ -162,9 +162,25 @@ export default function FirebaseAuthGate() {
         setNotice("Email is not verified yet. Open the latest verification email, then try again.");
         return;
       }
+      const verifiedUser = firebaseAuth.currentUser;
+      if (!verifiedUser) throw new Error("Please sign in again to continue.");
+      // Email verification does not always trigger a fresh auth-state event.
+      // Hydrate the verified account explicitly before mounting the app.
+      const profileRef = doc(firestoreDb, "users", verifiedUser.uid);
+      const profileSnap = await getDoc(profileRef);
+      if (!profileSnap.exists()) {
+        await setDoc(profileRef, {
+          uid: verifiedUser.uid,
+          name: verifiedUser.displayName || "FIT Member",
+          email: verifiedUser.email || "",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      }
+      const dataSnap = await getDoc(doc(firestoreDb, "userData", verifiedUser.uid));
+      hydrateFitnessData(dataSnap.exists() ? dataSnap.data().data : {});
       setVerificationEmail("");
-      setChecking(true);
-      setUser(firebaseAuth.currentUser);
+      setUser(verifiedUser);
     } catch (e) {
       setError(e.message || "Could not refresh email verification status.");
     } finally { setBusy(false); }
