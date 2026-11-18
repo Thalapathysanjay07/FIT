@@ -250,9 +250,36 @@ export default function FirebaseAuthGate() {
   }
 
   async function logout() {
-    await signOut(firebaseAuth);
-    localStorage.removeItem("fit-token");
-    hydrateFitnessData({});
+    const currentUser = firebaseAuth?.currentUser;
+    if (!currentUser || !firestoreDb) {
+      setError("Your Firebase session is unavailable. Please retry sign out.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      // Flush the latest locally stored fitness state before ending the session.
+      // This prevents the 15-second background sync interval from losing recent edits.
+      const data = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("fit-") && key !== "fit-token") {
+          try { data[key] = JSON.parse(localStorage.getItem(key)); } catch { /* Ignore malformed legacy values. */ }
+        }
+      }
+      await setDoc(doc(firestoreDb, "userData", currentUser.uid), {
+        uid: currentUser.uid,
+        data,
+        updatedAt: new Date().toISOString()
+      });
+      await signOut(firebaseAuth);
+      localStorage.removeItem("fit-token");
+      hydrateFitnessData({});
+    } catch (e) {
+      setError(e.message || "Could not save your latest fitness data. You are still signed in.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (checking) return <div className="auth-loading"><Activity/> FIT</div>;
