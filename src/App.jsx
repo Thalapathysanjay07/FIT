@@ -34,6 +34,7 @@ function AdminPanel(){
 
 export default function App({onSignOut,user}){
 const lastSavedData=useRef("");
+const paymentSubmitLock=useRef(false);
 const [syncStatus,setSyncStatus]=useState("syncing");
 const [page,S]=useState("Overview"),[mobile,M]=useState(false),[meals,SM]=useState(initialMeals),[done,SD]=useState(()=>read("fit-done",[])),[goal,SG]=useState(()=>read("fit-goal","Muscle gain")),[level,SL]=useState(()=>read("fit-level","Beginner")),[calTarget,SC]=useState(()=>read("fit-cal",2000)),[proTarget,SP]=useState(()=>read("fit-pro",120)),[water,SW]=useState(initialWater),[weights,SWt]=useState(()=>read("fit-weights",[])),[weightInput,SWeightInput]=useState(""),[ch,SH]=useState(()=>read("fit-ch",{})),[modal,SMo]=useState(false),[name,SN]=useState(""),[cal,SCal]=useState(""),[pro,SPro]=useState(""),[search,SS]=useState(""),[prompt,SPr]=useState(""),[reply,SR]=useState(""),[coachLoading,SCoachLoading]=useState(false),[coachMode,SCoachMode]=useState("chat"),[paymentConfig,SPaymentConfig]=useState(null),[qrData,SQrData]=useState(""),[membership,SMembership]=useState(null),[payments,SPayments]=useState([]),[selectedPlan,SSelectedPlan]=useState("monthly"),[utr,SUTR]=useState(""),[paymentBusy,SPaymentBusy]=useState(false),[paymentError,SPaymentError]=useState(""),[paymentMessage,SPaymentMessage]=useState(""),[toast,ST]=useState("");
 const cals=meals.reduce((s,m)=>s+Number(m.cal||0),0),protein=meals.reduce((s,m)=>s+Number(m.protein||0),0);
@@ -139,9 +140,12 @@ useEffect(()=>{
 },[page,selectedPlan]);
 
 async function submitUpiReference(e){
-  e.preventDefault();SPaymentError("");SPaymentMessage("");
+  e.preventDefault();
+  if(paymentSubmitLock.current)return;
+  SPaymentError("");SPaymentMessage("");
   if(!utr.trim()){SPaymentError("Enter the UPI transaction reference/UTR.");return;}
-  if(!/^[A-Za-z0-9-]{8,80}$/.test(utr.trim().replace(/\s/g,""))){SPaymentError("Enter a valid UTR (8–80 letters or numbers).");return;}
+  if(!/^[A-Za-z0-9-]{8,80}$/.test(utr.trim().replace(/\s/g,""))){SPaymentError("Enter a valid UTR (8–80 letters, numbers, or hyphens).");return;}
+  paymentSubmitLock.current=true;
   SPaymentBusy(true);
   try{
     if(import.meta.env.VITE_USE_FIREBASE_AUTH==="true"){
@@ -161,7 +165,7 @@ async function submitUpiReference(e){
       SMembership(status.membership||null);SPayments(status.payments||[]);
     }
   }catch(error){SPaymentError(error.message||"Payment submission failed.");}
-  finally{SPaymentBusy(false);}
+  finally{paymentSubmitLock.current=false;SPaymentBusy(false);}
 }
 
 const notify=t=>{ST(t);setTimeout(()=>ST(""),2500)};
