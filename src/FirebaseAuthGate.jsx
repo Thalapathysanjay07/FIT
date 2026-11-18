@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Activity, ArrowRight, LockKeyhole, Mail, UserRound } from "lucide-react";
-import { createUserWithEmailAndPassword, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, EmailAuthProvider, reauthenticateWithCredential, deleteUser, sendEmailVerification, reload, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { createUserWithEmailAndPassword, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, EmailAuthProvider, reauthenticateWithCredential, reauthenticateWithPopup, deleteUser, sendEmailVerification, reload, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, where, writeBatch } from "firebase/firestore";
 import App from "./App.jsx";
 import { firebaseAuth, firestoreDb, isFirebaseConfigured } from "./firebase.js";
@@ -186,12 +186,19 @@ export default function FirebaseAuthGate() {
     const currentUser = firebaseAuth.currentUser;
     if (!currentUser.email) { setError("This account needs a supported reauthentication method before deletion."); return; }
     if (!window.confirm("Permanently delete your FIT account and its Firebase fitness data? This cannot be undone.")) return;
-    const currentPassword = window.prompt("Enter your account password to confirm deletion:");
-    if (!currentPassword) return;
+    const usesGoogle = currentUser.providerData.some((provider) => provider.providerId === "google.com");
+    const currentPassword = usesGoogle ? "" : window.prompt("Enter your account password to confirm deletion:");
+    if (!usesGoogle && !currentPassword) return;
     setBusy(true); setError(""); setNotice("");
     try {
-      const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
-      await reauthenticateWithCredential(currentUser, credential);
+      if (usesGoogle) {
+        // Google accounts must reauthenticate with Google, not an email/password
+        // credential that may not exist for this account.
+        await reauthenticateWithPopup(currentUser, new GoogleAuthProvider());
+      } else {
+        const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+        await reauthenticateWithCredential(currentUser, credential);
+      }
       const ownedQueries = [
         query(collection(firestoreDb, "activityDays"), where("userId", "==", currentUser.uid)),
         query(collection(firestoreDb, "activityNotifications"), where("userId", "==", currentUser.uid)),
