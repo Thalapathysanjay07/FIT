@@ -95,7 +95,8 @@ useEffect(()=>{
         const merchantName=String(import.meta.env.VITE_FIT_MERCHANT_NAME||"FIT").trim();
         SPaymentConfig({upiId,merchantName,plans:[{code:"monthly",name:"FIT Pro Monthly",amount:49,days:30},{code:"yearly",name:"FIT Pro Yearly",amount:499,days:365}]});
         if(/^[A-Za-z0-9._-]{2,256}@[A-Za-z0-9.-]{2,64}$/.test(upiId)){
-          const plan=selectedPlan==="yearly"?{amount:"499.00",name:"FIT Pro Yearly"}:{amount:"49.00",name:"FIT Pro Monthly"};\n          const uri="upi://pay?"+new URLSearchParams({pa:upiId,pn:merchantName,am:plan.amount,cu:"INR",tn:plan.name}).toString();
+          const plan=selectedPlan==="yearly"?{amount:"499.00",name:"FIT Pro Yearly"}:{amount:"49.00",name:"FIT Pro Monthly"};
+          const uri="upi://pay?"+new URLSearchParams({pa:upiId,pn:merchantName,am:plan.amount,cu:"INR",tn:plan.name}).toString();
           SQrData(await QRCode.toDataURL(uri,{errorCorrectionLevel:"M",margin:2,width:280}));
         }
         const [memberSnap,paymentSnap]=await Promise.all([
@@ -129,7 +130,8 @@ async function submitUpiReference(e){
     if(import.meta.env.VITE_USE_FIREBASE_AUTH==="true"){
       const currentUser=firebaseAuth?.currentUser;if(!currentUser||!firestoreDb)throw new Error("Please sign in to Firebase again.");
       const cleanUtr=utr.trim().replace(/\s/g,"");
-      const plan=selectedPlan==="yearly"?{planCode:"yearly",amountPaise:49900}:{planCode:"monthly",amountPaise:4900};\n      await setDoc(doc(firestoreDb,"paymentRequests",cleanUtr),{userId:currentUser.uid,...plan,utr:cleanUtr,status:"pending",createdAt:new Date().toISOString()});
+      const plan=selectedPlan==="yearly"?{planCode:"yearly",amountPaise:49900}:{planCode:"monthly",amountPaise:4900};
+      await setDoc(doc(firestoreDb,"paymentRequests",cleanUtr),{userId:currentUser.uid,...plan,utr:cleanUtr,status:"pending",createdAt:new Date().toISOString()});
       SPaymentMessage("Payment reference submitted. FIT Pro activates only after the owner verifies the payment.");SUTR("");
       const history=await getDocs(query(collection(firestoreDb,"paymentRequests"),where("userId","==",currentUser.uid)));
       SPayments(history.docs.map(d=>({id:d.id,...d.data(),created_at:d.data().createdAt})).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at))));
