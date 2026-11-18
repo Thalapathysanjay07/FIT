@@ -134,6 +134,30 @@ describe("FIT Firestore security rules", () => {
   });
 
 
+
+  it("allows owners to save bounded fitness snapshots and rejects oversized or foreign snapshots", async () => {
+    const ownerDb = env.authenticatedContext("user-a").firestore();
+    const validSnapshot = {
+      uid: "user-a",
+      data: { "fit-goal": "Muscle gain", "fit-water": 1800 },
+      updatedAt: new Date().toISOString()
+    };
+    await assertSucceeds(setDoc(doc(ownerDb, "userData/user-a"), validSnapshot));
+    await assertFails(setDoc(doc(ownerDb, "userData/user-b"), {
+      ...validSnapshot,
+      uid: "user-b"
+    }));
+    const oversizedData = Object.fromEntries(
+      Array.from({ length: 101 }, (_, index) => [`fit-item-${index}`, index])
+    );
+    await assertFails(setDoc(doc(ownerDb, "userData/user-a"), {
+      uid: "user-a", data: oversizedData, updatedAt: new Date().toISOString()
+    }));
+    await assertFails(setDoc(doc(ownerDb, "userData/user-a"), {
+      uid: "user-a", data: [], updatedAt: new Date().toISOString()
+    }));
+  });
+
   it("allows account owners to delete only their own fitness data", async () => {
     await env.withSecurityRulesDisabled(async ctx => {
       await setDoc(doc(ctx.firestore(), "userData/user-a"), {
