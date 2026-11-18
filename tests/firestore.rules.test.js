@@ -2,7 +2,7 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { initializeTestEnvironment, assertSucceeds, assertFails } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 
 const projectId = "fit-rules-test";
 let env;
@@ -16,7 +16,7 @@ beforeEach(async () => env.clearFirestore());
 after(async () => env.cleanup());
 
 describe("FIT Firestore security rules", () => {
-  it("keeps userData private to its owner", async () => {
+  it("allows a user to create a Google profile with permitted provider fields", async () => {\n    const db = env.authenticatedContext("google-user").firestore();\n    await assertSucceeds(setDoc(doc(db, "users/google-user"), {\n      uid: "google-user", name: "FIT Member", email: "google@example.com",\n      photoURL: "https://example.com/avatar.png", provider: "google",\n      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()\n    }));\n  });\n\n  it("prevents a user from adding privileged fields to an existing profile", async () => {\n    const db = env.authenticatedContext("user-a").firestore();\n    await setDoc(doc(db, "users/user-a"), {\n      uid: "user-a", name: "FIT Member", email: "user@example.com",\n      createdAt: "now", updatedAt: "now"\n    });\n    await assertFails(updateDoc(doc(db, "users/user-a"), { role: "admin", isPremium: true }));\n  });\n\n  it("keeps userData private to its owner", async () => {
     await env.withSecurityRulesDisabled(async ctx => {
       await setDoc(doc(ctx.firestore(), "userData/user-a"), { uid: "user-a", data: {}, updatedAt: "now" });
     });
