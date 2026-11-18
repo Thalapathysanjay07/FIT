@@ -150,6 +150,37 @@ describe("FIT Firestore security rules", () => {
     await assertSucceeds(getDoc(doc(otherDb, "userData/user-b")));
   });
 
+  it("allows owners to delete their activity, notifications, payment requests and membership records", async () => {
+    await env.withSecurityRulesDisabled(async ctx => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "activityDays/user-a_2026-11-17"), {
+        userId: "user-a", activityDate: "2026-11-17", steps: 5000,
+        stepGoal: 8000, workouts: 1, leaderboardOptIn: false, updatedAt: "now"
+      });
+      await setDoc(doc(db, "activityNotifications/user-a_notice"), {
+        userId: "user-a", kind: "workout", title: "Workout logged",
+        body: "Workout saved", createdAt: "now", readAt: null
+      });
+      await setDoc(doc(db, "paymentRequests/123456789012"), {
+        userId: "user-a", planCode: "monthly", amountPaise: 4900,
+        utr: "123456789012", status: "pending", createdAt: "now"
+      });
+      await setDoc(doc(db, "memberships/user-a"), {
+        userId: "user-a", planCode: "monthly", startsAt: "now", expiresAt: "later"
+      });
+    });
+    const ownerDb = env.authenticatedContext("user-a").firestore();
+    const otherDb = env.authenticatedContext("user-b").firestore();
+    await assertSucceeds(deleteDoc(doc(ownerDb, "activityDays/user-a_2026-11-17")));
+    await assertSucceeds(deleteDoc(doc(ownerDb, "activityNotifications/user-a_notice")));
+    await assertSucceeds(deleteDoc(doc(ownerDb, "paymentRequests/123456789012")));
+    await assertSucceeds(deleteDoc(doc(ownerDb, "memberships/user-a")));
+    await assertFails(deleteDoc(doc(otherDb, "activityDays/user-a_2026-11-17")));
+    await assertFails(deleteDoc(doc(otherDb, "activityNotifications/user-a_notice")));
+    await assertFails(deleteDoc(doc(otherDb, "paymentRequests/123456789012")));
+    await assertFails(deleteDoc(doc(otherDb, "memberships/user-a")));
+  });
+
   it("allows only bounded activity values owned by the signed-in user", async () => {
     const db = env.authenticatedContext("user-a").firestore();
     const valid = { userId: "user-a", activityDate: "2026-11-17", steps: 5000, stepGoal: 8000, workouts: 1, leaderboardOptIn: false, displayName: "FIT Member", updatedAt: new Date().toISOString() };
