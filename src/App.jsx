@@ -165,7 +165,7 @@ async function submitUpiReference(e){
 }
 
 const notify=t=>{ST(t);setTimeout(()=>ST(""),2500)};
-const nav=[["Overview",Home],["Workouts",Dumbbell],["Plan",CalendarDays],["Exercise Library",Search],["Nutrition",Apple],["Meal Planner",Utensils],["Progress",BarChart3],["Discover",TrendingUp],["Challenges",Trophy],["Walking Tracker",Footprints],["Activity & Rewards",Trophy],["FIT Coach",Sparkles],["Profile",Users],["Settings",Wallet],["Membership",Crown],["Admin",Users]];
+const nav=[["Overview",Home],["Workouts",Dumbbell],["Plan",CalendarDays],["Exercise Library",Search],["Nutrition",Apple],["Meal Planner",Utensils],["Progress",BarChart3],["Discover",TrendingUp],["Challenges",Trophy],["Walking Tracker",Footprints],["Activity & Rewards",Trophy],["FIT Coach",Sparkles],["Profile",Users],["Settings",Wallet],["Membership",Crown],...(import.meta.env.VITE_USE_FIREBASE_AUTH==="true"?[]:[["Admin",Users]])];
 const filtered=plans.filter(p=>(level==="Beginner"?p.level!=="Advanced":level==="Intermediate"?p.level!=="Advanced":true));
 function addWeight(e){e.preventDefault();const value=Number(weightInput);if(!Number.isFinite(value)||value<20||value>500)return;SWt([...weights,{id:Date.now(),kg:value,date:new Date().toISOString()}].sort((a,b)=>new Date(a.date)-new Date(b.date)));SWeightInput("");notify("Weight check-in saved");}
 function addMeal(e){e.preventDefault();if(!name.trim())return;SM([...meals,{id:Date.now(),name,cal:Number(cal)||0,protein:Number(pro)||0}]);SN("");SCal("");SPro("");SMo(false);notify("Meal saved on this device");}
