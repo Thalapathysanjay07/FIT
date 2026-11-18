@@ -59,13 +59,15 @@ describe("FIT Firestore security rules", () => {
     }));
   });
 
-  it("accepts only a valid pending quarterly payment request", async () => {
+  it("accepts the published monthly and yearly pending payment amounts only", async () => {
     const db = env.authenticatedContext("user-a").firestore();
-    const valid = { userId: "user-a", planCode: "quarterly", amountPaise: 4900, utr: "123456789012", status: "pending", createdAt: new Date().toISOString() };
-    await assertSucceeds(setDoc(doc(db, "paymentRequests/123456789012"), valid));
-    await assertFails(setDoc(doc(db, "paymentRequests/999999999999"), { ...valid, utr: "999999999999", amountPaise: 5000 }));
+    const monthly = { userId: "user-a", planCode: "monthly", amountPaise: 4900, utr: "123456789012", status: "pending", createdAt: new Date().toISOString() };
+    await assertSucceeds(setDoc(doc(db, "paymentRequests/123456789012"), monthly));
+    const yearly = { userId: "user-a", planCode: "yearly", amountPaise: 49900, utr: "123456789013", status: "pending", createdAt: new Date().toISOString() };
+    await assertSucceeds(setDoc(doc(db, "paymentRequests/123456789013"), yearly));
+    await assertFails(setDoc(doc(db, "paymentRequests/999999999999"), { ...monthly, utr: "999999999999", amountPaise: 5000 }));
+    await assertFails(setDoc(doc(db, "paymentRequests/999999999998"), { ...yearly, utr: "999999999998", amountPaise: 4900 }));
   });
-
   it("allows only bounded activity values owned by the signed-in user", async () => {
     const db = env.authenticatedContext("user-a").firestore();
     const valid = { userId: "user-a", activityDate: "2026-11-17", steps: 5000, stepGoal: 8000, workouts: 1, leaderboardOptIn: false, displayName: "FIT Member", updatedAt: new Date().toISOString() };
