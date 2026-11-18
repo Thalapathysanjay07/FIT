@@ -47,12 +47,15 @@ const maxWeeklyCalories=Math.max(1,...weeklyNutrition.map(d=>d.calories));
 const maxWeeklySteps=Math.max(1,...weeklyNutrition.map(d=>d.steps));
 useEffect(()=>localStorage.setItem("fit-meals-"+dayKey(),JSON.stringify(meals)),[meals]);useEffect(()=>localStorage.setItem("fit-done",JSON.stringify(done)),[done]);useEffect(()=>localStorage.setItem("fit-goal",JSON.stringify(goal)),[goal]);useEffect(()=>localStorage.setItem("fit-level",JSON.stringify(level)),[level]);useEffect(()=>localStorage.setItem("fit-cal",JSON.stringify(calTarget)),[calTarget]);useEffect(()=>localStorage.setItem("fit-pro",JSON.stringify(proTarget)),[proTarget]);useEffect(()=>localStorage.setItem("fit-water-"+dayKey(),JSON.stringify(water)),[water]);useEffect(()=>localStorage.setItem("fit-weights",JSON.stringify(weights)),[weights]);useEffect(()=>localStorage.setItem("fit-ch",JSON.stringify(ch)),[ch]);
 useEffect(()=>{
+  let active=true;
+  let inFlight=false;
   const sync=async()=>{
+    if(inFlight||!active)return;
     const firebaseMode=import.meta.env.VITE_USE_FIREBASE_AUTH==="true";
     const currentUser=firebaseMode?firebaseAuth?.currentUser:null;
     const legacyToken=localStorage.getItem("fit-token");
-    if(firebaseMode&&!currentUser){setSyncStatus("waiting");return;}
-    if(!firebaseMode&&!legacyToken){setSyncStatus("local");return;}
+    if(firebaseMode&&(!currentUser||currentUser.uid!==user?.uid)){if(active)setSyncStatus("waiting");return;}
+    if(!firebaseMode&&!legacyToken){if(active)setSyncStatus("local");return;}
     const data={};
     for(let i=0;i<localStorage.length;i++){
       const key=localStorage.key(i);
@@ -61,8 +64,9 @@ useEffect(()=>{
       }
     }
     const serialized=JSON.stringify(data);
-    if(serialized===lastSavedData.current){setSyncStatus("saved");return;}
-    setSyncStatus("syncing");
+    if(serialized===lastSavedData.current){if(active)setSyncStatus("saved");return;}
+    inFlight=true;
+    if(active)setSyncStatus("syncing");
     try{
       if(firebaseMode){
         if(!firestoreDb)throw new Error("Firestore is not configured.");
@@ -72,7 +76,7 @@ useEffect(()=>{
           updatedAt:new Date().toISOString()
         });
         lastSavedData.current=serialized;
-        setSyncStatus("saved");
+        if(active)setSyncStatus("saved");
       }else{
         const response=await fetch(`${import.meta.env.VITE_API_URL||""}/api/data`,{
           method:"PUT",
@@ -81,12 +85,13 @@ useEffect(()=>{
         });
         if(!response.ok)throw new Error(`Data sync failed (HTTP ${response.status}).`);
         lastSavedData.current=serialized;
-        setSyncStatus("saved");
+        if(active)setSyncStatus("saved");
       }
-    }catch(error){setSyncStatus("error");console.warn("FIT data sync failed:",error);}
+    }catch(error){if(active){setSyncStatus("error");console.warn("FIT data sync failed:",error);}}
+    finally{inFlight=false;}
   };
   const handleOnline=()=>{sync();};
-  const handleOffline=()=>setSyncStatus("offline");
+  const handleOffline=()=>{if(active)setSyncStatus("offline");};
   const handleVisible=()=>{if(document.visibilityState==="visible"&&navigator.onLine)sync();};
   const timer=setInterval(sync,15000);
   window.addEventListener("online",handleOnline);
@@ -95,12 +100,13 @@ useEffect(()=>{
   if(!navigator.onLine)setSyncStatus("offline");
   sync();
   return()=>{
+    active=false;
     clearInterval(timer);
     window.removeEventListener("online",handleOnline);
     window.removeEventListener("offline",handleOffline);
     document.removeEventListener("visibilitychange",handleVisible);
   };
-},[]);
+},[user?.uid]);
 useEffect(()=>{
   if(page!=="Membership")return;
   let active=true;SPaymentError("");SQrData("");
