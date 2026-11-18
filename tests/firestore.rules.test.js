@@ -16,7 +16,25 @@ beforeEach(async () => env.clearFirestore());
 after(async () => env.cleanup());
 
 describe("FIT Firestore security rules", () => {
-  it("allows a user to create a Google profile with permitted provider fields", async () => {\n    const db = env.authenticatedContext("google-user").firestore();\n    await assertSucceeds(setDoc(doc(db, "users/google-user"), {\n      uid: "google-user", name: "FIT Member", email: "google@example.com",\n      photoURL: "https://example.com/avatar.png", provider: "google",\n      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()\n    }));\n  });\n\n  it("prevents a user from adding privileged fields to an existing profile", async () => {\n    const db = env.authenticatedContext("user-a").firestore();\n    await setDoc(doc(db, "users/user-a"), {\n      uid: "user-a", name: "FIT Member", email: "user@example.com",\n      createdAt: "now", updatedAt: "now"\n    });\n    await assertFails(updateDoc(doc(db, "users/user-a"), { role: "admin", isPremium: true }));\n  });\n\n  it("keeps userData private to its owner", async () => {
+  it("allows a user to create a Google profile with permitted provider fields", async () => {
+    const db = env.authenticatedContext("google-user").firestore();
+    await assertSucceeds(setDoc(doc(db, "users/google-user"), {
+      uid: "google-user", name: "FIT Member", email: "google@example.com",
+      photoURL: "https://example.com/avatar.png", provider: "google",
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+    }));
+  });
+
+  it("prevents a user from adding privileged fields to an existing profile", async () => {
+    const db = env.authenticatedContext("user-a").firestore();
+    await setDoc(doc(db, "users/user-a"), {
+      uid: "user-a", name: "FIT Member", email: "user@example.com",
+      createdAt: "now", updatedAt: "now"
+    });
+    await assertFails(updateDoc(doc(db, "users/user-a"), { role: "admin", isPremium: true }));
+  });
+
+  it("keeps userData private to its owner", async () => {
     await env.withSecurityRulesDisabled(async ctx => {
       await setDoc(doc(ctx.firestore(), "userData/user-a"), { uid: "user-a", data: {}, updatedAt: "now" });
     });
