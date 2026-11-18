@@ -107,6 +107,32 @@ describe("FIT Firestore security rules", () => {
     await assertFails(setDoc(doc(db, "paymentRequests/999999999999"), { ...monthly, utr: "999999999999", amountPaise: 5000 }));
     await assertFails(setDoc(doc(db, "paymentRequests/999999999998"), { ...yearly, utr: "999999999998", amountPaise: 4900 }));
   });
+
+  it("keeps payment requests private to their owner", async () => {
+    await env.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), "paymentRequests/123456789012"), {
+        userId: "user-a", planCode: "monthly", amountPaise: 4900,
+        utr: "123456789012", status: "pending", createdAt: "now"
+      });
+    });
+    await assertSucceeds(getDoc(doc(env.authenticatedContext("user-a").firestore(), "paymentRequests/123456789012")));
+    await assertFails(getDoc(doc(env.authenticatedContext("user-b").firestore(), "paymentRequests/123456789012")));
+  });
+
+  it("prevents clients from overwriting an existing payment request", async () => {
+    await env.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), "paymentRequests/123456789012"), {
+        userId: "user-a", planCode: "monthly", amountPaise: 4900,
+        utr: "123456789012", status: "pending", createdAt: "now"
+      });
+    });
+    const db = env.authenticatedContext("user-a").firestore();
+    await assertFails(setDoc(doc(db, "paymentRequests/123456789012"), {
+      userId: "user-a", planCode: "monthly", amountPaise: 4900,
+      utr: "123456789012", status: "approved", createdAt: "now"
+    }));
+  });
+
   it("allows only bounded activity values owned by the signed-in user", async () => {
     const db = env.authenticatedContext("user-a").firestore();
     const valid = { userId: "user-a", activityDate: "2026-11-17", steps: 5000, stepGoal: 8000, workouts: 1, leaderboardOptIn: false, displayName: "FIT Member", updatedAt: new Date().toISOString() };
