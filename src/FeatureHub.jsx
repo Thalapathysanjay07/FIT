@@ -135,7 +135,7 @@ function WalkingTracker({onToast}){
    localStorage.setItem("fit-step-source","Manual");
    onToast?.("Steps added");
  }
- async function syncStepsToAccount(){
+ async function syncStepsToAccount({quiet=false}={}){
    try{
      if(import.meta.env.VITE_USE_FIREBASE_AUTH==="true"){
        const user=firebaseAuth?.currentUser;
@@ -153,9 +153,21 @@ function WalkingTracker({onToast}){
        const data=await response.json().catch(()=>({}));
        if(!response.ok)throw new Error(data.error||"Could not sync walking activity.");
      }
-     onToast?.("Walking activity synced to your FIT account");
-   }catch(error){setStatus(error.message||"Sign in to sync activity to your FIT account.");}
+     if(!quiet)onToast?.("Walking activity synced to your FIT account");
+     return true;
+   }catch(error){
+     if(!quiet)setStatus(error.message||"Sign in to sync activity to your FIT account.");
+     return false;
+   }
  }
+ useEffect(()=>{
+   const signedIn=import.meta.env.VITE_USE_FIREBASE_AUTH==="true"
+     ? Boolean(firebaseAuth?.currentUser&&firestoreDb)
+     : Boolean(localStorage.getItem("fit-token"));
+   if(!signedIn)return;
+   const timer=setTimeout(()=>{syncStepsToAccount({quiet:true});},30000);
+   return()=>clearTimeout(timer);
+ },[steps,target,date]);
  return <div className="feature-page walking-page">
    <div className="section-heading"><div><div className="eyebrow">DAILY ACTIVITY</div><h2>Walking Tracker</h2><p className="muted">Your daily movement, synced with supported health apps and fitness bands.</p></div><span className="feature-tag"><Footprints size={14}/> {source}</span></div>
    <section className="panel walking-main">
